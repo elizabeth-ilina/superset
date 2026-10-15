@@ -41,6 +41,7 @@ import {
   QueryResponse,
   Query,
   QueryState,
+  SupersetClient,
 } from '@superset-ui/core';
 import { Alert } from '@apache-superset/core/components';
 import { css, styled, useTheme } from '@apache-superset/core/theme';
@@ -54,6 +55,7 @@ import { debounce, isEmpty } from 'lodash-es';
 import Mousetrap from 'mousetrap';
 import {
   Button,
+  Loading,
   Divider,
   EmptyState,
   Input,
@@ -287,6 +289,13 @@ const SqlEditor: FC<Props> = ({
     getItem(LocalStorageKeys.SqllabIsRenderHtmlEnabled, false),
   );
   const [showCreateAsModal, setShowCreateAsModal] = useState(false);
+  const [costWarning, setCostWarning] = useState<{
+    estimate: string;
+    threshold: number;
+    proceed: () => void;
+  } | null>(null);
+  const [costWarningError, setCostWarningError] = useState<string | null>(null);
+  const [estimatePending, setEstimatePending] = useState(false);
   const [createAs, setCreateAs] = useState('');
   const currentSQL = useRef<string>(queryEditor.sql);
   const showEmptyState = useMemo(
@@ -299,7 +308,7 @@ const SqlEditor: FC<Props> = ({
   const successful = latestQuery?.state === QueryState.Success;
   const resultColumns = latestQuery?.results?.columns || [];
 
-  const startQuery = useCallback(
+  const executeQuery = useCallback(
     (
       ctasArg = false,
       ctas_method: (typeof CtasEnum)[keyof typeof CtasEnum] = CtasEnum.Table,
@@ -322,6 +331,128 @@ const SqlEditor: FC<Props> = ({
       dispatch(setActiveSouthPaneTab('Results'));
     },
     [ctas, database, defaultQueryLimit, dispatch, queryEditor],
+  );
+
+  const startQuery = useCallback(
+    (
+      ctasArg = false,
+      ctas_method: (typeof CtasEnum)[keyof typeof CtasEnum] = CtasEnum.Table,
+      skipWarning = false,
+    ) => {
+      const threshold = database?.cost_estimate_warning_threshold_bytes;
+      const shouldWarn =
+        !skipWarning &&
+        !ctasArg &&
+        queryEditor.sql.trim() !== '' &&
+        threshold !== null &&
+        threshold !== undefined &&
+        isFeatureEnabled(FeatureFlag.EstimateQueryCost) &&
+        isFeatureEnabled(FeatureFlag.SqlLabQueryCostWarnings) &&
+        database?.allows_cost_estimate;
+      const hasUsableByteEstimate = database?.backend === 'bigquery';
+      if (!shouldWarn || !database || !hasUsableByteEstimate) {
+        executeQuery(ctasArg, ctas_method);
+        return;
+      }
+
+      let capturedTemplateParams: Record<string, unknown>;
+      try {
+        capturedTemplateParams = JSON.parse(queryEditor.templateParams || '{}');
+      } catch {
+        setCostWarningError(t('Query template parameters are not valid JSON.'));
+        return;
+      }
+      const captured = {
+        sql: queryEditor.selectedText || queryEditor.sql,
+        selectedText: queryEditor.selectedText,
+        dbId: queryEditor.dbId,
+        schema: queryEditor.schema,
+        catalog: queryEditor.catalog,
+        templateParams: JSON.stringify(capturedTemplateParams),
+        queryLimit: queryEditor.queryLimit,
+        databaseId: database.id,
+        queryEditorId: queryEditor.id,
+        ctasArg,
+        ctasMethod: ctas_method,
+      };
+      const current = () => ({
+        sql: queryEditor.selectedText || queryEditor.sql,
+        selectedText: queryEditor.selectedText,
+        dbId: queryEditor.dbId,
+        schema: queryEditor.schema,
+        catalog: queryEditor.catalog,
+        templateParams: queryEditor.templateParams
+          ? (() => {
+              try {
+                return JSON.stringify(JSON.parse(queryEditor.templateParams));
+              } catch {
+                return queryEditor.templateParams;
+              }
+            })()
+          : '{}',
+        queryLimit: queryEditor.queryLimit,
+        databaseId: database.id,
+        queryEditorId: queryEditor.id,
+        ctasArg,
+        ctasMethod: ctas_method,
+      });
+      const isCurrent = () =>
+        database?.id === captured.databaseId &&
+        JSON.stringify(current()) === JSON.stringify(captured);
+      setCostWarningError(null);
+      setEstimatePending(true);
+      SupersetClient.post({
+        endpoint: '/api/v1/sqllab/estimate/',
+        body: JSON.stringify({
+          database_id: captured.dbId,
+          sql: captured.sql,
+          schema: captured.schema,
+          catalog: captured.catalog,
+          template_params: capturedTemplateParams,
+          include_raw: true,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then(({ json }) => {
+          setEstimatePending(false);
+          if (!isCurrent()) return;
+          const rows = json.result?.raw_cost;
+          const bytes = Array.isArray(rows)
+            ? rows.reduce(
+                (total: number, row: Record<string, unknown>) =>
+                  total +
+                  (typeof row.bytes_processed === 'number'
+                    ? row.bytes_processed
+                    : 0),
+                0,
+              )
+            : NaN;
+          if (!Number.isFinite(bytes)) {
+            setCostWarningError(
+              t('The estimate did not include a usable processed-byte value.'),
+            );
+          } else if (bytes <= threshold) {
+            executeQuery(ctasArg, ctas_method);
+          } else {
+            setCostWarning({
+              estimate: new Intl.NumberFormat().format(bytes),
+              threshold,
+              proceed: () => {
+                if (isCurrent()) executeQuery(ctasArg, ctas_method);
+              },
+            });
+          }
+        })
+        .catch(() => {
+          setEstimatePending(false);
+          if (isCurrent()) {
+            setCostWarningError(
+              t('Could not estimate query cost. Review the query or run without an estimate.'),
+            );
+          }
+        });
+    },
+    [database, executeQuery, queryEditor],
   );
 
   const formatCurrentQuery = useCallback(
@@ -1061,6 +1192,80 @@ const SqlEditor: FC<Props> = ({
         queryPane()
       )}
 
+      <Modal
+        show={!!costWarning || !!costWarningError || estimatePending}
+        name={t('Query cost warning')}
+        title={t('Query cost warning')}
+        onHide={() => {
+          setEstimatePending(false);
+          setCostWarning(null);
+          setCostWarningError(null);
+        }}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setCostWarning(null);
+                setCostWarningError(null);
+              }}
+            >
+              {t('Cancel')}
+            </Button>
+            {costWarning && (
+              <Button
+                buttonStyle="primary"
+                onClick={() => {
+                  const { proceed } = costWarning;
+                  setCostWarning(null);
+                  proceed();
+                }}
+              >
+                {t('Run query anyway')}
+              </Button>
+            )}
+            {costWarningError && (
+              <>
+                <Button
+                  buttonStyle="primary"
+                  onClick={() => {
+                    setCostWarningError(null);
+                    startQuery(false, CtasEnum.Table, true);
+                  }}
+                >
+                  {t('Run without estimate')}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setCostWarningError(null);
+                    startQuery();
+                  }}
+                >
+                  {t('Retry estimate')}
+                </Button>
+              </>
+            )}
+          </>
+        }
+      >
+        {estimatePending ? (
+          <Loading position="normal" />
+        ) : costWarning ? (
+          <Alert
+            type="warning"
+            message={t(
+              'This query is estimated to process %(estimate)s bytes, above the configured threshold of %(threshold)s bytes.',
+              {
+                estimate: costWarning.estimate,
+                threshold: new Intl.NumberFormat().format(
+                  costWarning.threshold,
+                ),
+              },
+            )}
+          />
+        ) : (
+          <Alert type="error" message={costWarningError} />
+        )}
+      </Modal>
       <Modal
         show={showCreateAsModal}
         name={t(createViewModalTitle)}

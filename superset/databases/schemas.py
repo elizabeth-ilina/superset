@@ -289,6 +289,29 @@ def extra_validator(value: str) -> str:  # noqa: C901
                 [_("Extra field must be a mapping from string keys to values.")]
             )
 
+        warning_threshold = extra_.get("cost_estimate_warning_threshold_bytes")
+        if warning_threshold is not None and (
+            isinstance(warning_threshold, bool)
+            or not isinstance(warning_threshold, int)
+            or warning_threshold < 0
+            or warning_threshold > 2**53 - 1
+        ):
+            raise ValidationError(
+                [
+                    _(
+                        "cost_estimate_warning_threshold_bytes must be an integer "
+                        "between 0 and %(max_value)s.",
+                        max_value=2**53 - 1,
+                    )
+                ]
+            )
+        if "cost_estimate_warning_enabled" in extra_ and not isinstance(
+            extra_["cost_estimate_warning_enabled"], bool
+        ):
+            raise ValidationError(
+                [_("cost_estimate_warning_enabled must be a boolean.")]
+            )
+
         metadata_signature = inspect.signature(MetaData)
         for key in extra_.get("metadata_params", {}):
             if key not in metadata_signature.parameters:
@@ -1003,6 +1026,10 @@ class ImportV1DatabaseExtraSchema(Schema):
     )
     schemas_allowed_for_csv_upload = fields.List(fields.String())
     cost_estimate_enabled = fields.Boolean()
+    cost_estimate_warning_enabled = fields.Boolean()
+    cost_estimate_warning_threshold_bytes = fields.Integer(
+        validate=Range(min=0, max=2**53 - 1)
+    )
     allows_virtual_table_explore = fields.Boolean(required=False)
     cancel_query_on_windows_unload = fields.Boolean(required=False)
     disable_data_preview = fields.Boolean(required=False)

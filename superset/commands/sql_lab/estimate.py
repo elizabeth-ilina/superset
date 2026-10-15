@@ -39,6 +39,7 @@ from superset.exceptions import (
 )
 from superset.jinja_context import get_template_processor
 from superset.models.core import Database
+from superset.superset_typing import NotRequired
 from superset.sql.parse import SQLScript
 from superset.utils import core as utils, json
 from superset.utils.rls import apply_rls
@@ -52,6 +53,7 @@ class EstimateQueryCostType(TypedDict):
     template_params: dict[str, Any]
     catalog: str | None
     schema: str | None
+    include_raw: NotRequired[bool]
 
 
 class QueryEstimationCommand(BaseCommand):
@@ -68,6 +70,7 @@ class QueryEstimationCommand(BaseCommand):
         self._template_params = params.get("template_params", {})
         self._schema = params.get("schema") or ""
         self._catalog = params.get("catalog")
+        self._include_raw = params.get("include_raw", False)
 
     def validate(self) -> None:
         # Load the database through the DAO so ``DatabaseFilter`` scopes
@@ -164,9 +167,7 @@ class QueryEstimationCommand(BaseCommand):
 
         return sql
 
-    def run(
-        self,
-    ) -> list[dict[str, Any]]:
+    def run(self) -> list[dict[str, Any]] | dict[str, Any]:
         self.validate()
 
         sql = self._sql
@@ -242,8 +243,11 @@ class QueryEstimationCommand(BaseCommand):
         query_cost_formatters: dict[str, Any] = app.config[
             "QUERY_COST_FORMATTERS_BY_ENGINE"
         ]
+        raw_cost = cost
         query_cost_formatter = query_cost_formatters.get(
             spec.engine, spec.query_cost_formatter
         )
         cost = query_cost_formatter(cost)
+        if self._include_raw:
+            return {"cost": cost, "raw_cost": raw_cost}
         return cost

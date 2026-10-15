@@ -2262,6 +2262,39 @@ describe('dbReducer', () => {
     });
   });
 
+  test('ExtraInputChange stores a safe query warning threshold in bytes', () => {
+    const action: DBReducerActionType = {
+      type: ActionType.ExtraInputChange,
+      payload: {
+        name: 'cost_estimate_warning_threshold_bytes',
+        value: '104857600',
+      },
+    };
+    expect(dbReducer(databaseFixture, action)).toEqual({
+      ...databaseFixture,
+      extra: '{"cost_estimate_warning_threshold_bytes":104857600}',
+    });
+  });
+
+  test('ExtraInputChange clears an empty query warning threshold', () => {
+    const action: DBReducerActionType = {
+      type: ActionType.ExtraInputChange,
+      payload: {
+        name: 'cost_estimate_warning_threshold_bytes',
+        value: '',
+      },
+    };
+    expect(
+      dbReducer(
+        {
+          ...databaseFixture,
+          extra: '{"cost_estimate_warning_threshold_bytes":104857600}',
+        },
+        action,
+      ),
+    ).toEqual({ ...databaseFixture, extra: '{}' });
+  });
+
   test('InputChange stores cache_timeout, allowing -1 (bypass cache)', () => {
     const action: DBReducerActionType = {
       type: ActionType.InputChange,

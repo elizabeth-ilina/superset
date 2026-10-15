@@ -216,6 +216,58 @@ const ExtraOptions = ({
                   <StyledInputContainer css={no_margin_bottom}>
                     <div className="input-container">
                       <Checkbox
+                        id="cost_estimate_enabled"
+                        name="cost_estimate_enabled"
+                        indeterminate={false}
+                        checked={!!extraJson?.cost_estimate_enabled}
+                        onChange={onExtraInputChange}
+                      >
+                        {t('Enable query cost estimation')}
+                      </Checkbox>
+                      <InfoTooltip
+                        tooltip={t(
+                          'For Bigquery, Presto and Postgres, shows a button to compute cost before running a query.',
+                        )}
+                      />
+                    </div>
+                  </StyledInputContainer>
+                  <StyledInputContainer css={no_margin_bottom}>
+                    <div className="input-container">
+                      <Checkbox
+                        id="cost_estimate_warning_enabled"
+                        name="cost_estimate_warning_enabled"
+                        indeterminate={false}
+                        checked={!!extraJson?.cost_estimate_warning_enabled}
+                        disabled={!extraJson?.cost_estimate_enabled}
+                        onChange={onExtraInputChange}
+                      >
+                        {t('Enable pre-run query cost warnings')}
+                      </Checkbox>
+                      <InfoTooltip
+                        tooltip={t(
+                          'Warn before running a query when its estimated processed bytes exceed this threshold.',
+                        )}
+                      />
+                    </div>
+                    <div className="input-container">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        aria-label={t('Warning threshold in bytes')}
+                        name="cost_estimate_warning_threshold_bytes"
+                        value={extraJson?.cost_estimate_warning_threshold_bytes ?? ''}
+                        disabled={
+                          !extraJson?.cost_estimate_enabled ||
+                          !extraJson?.cost_estimate_warning_enabled
+                        }
+                        onChange={onExtraInputChange}
+                      />
+                    </div>
+                  </StyledInputContainer>
+                  <StyledInputContainer css={no_margin_bottom}>
+                    <div className="input-container">
+                      <Checkbox
                         id="allow_cvas"
                         name="allow_cvas"
                         indeterminate={false}
@@ -266,24 +318,6 @@ const ExtraOptions = ({
                       <InfoTooltip
                         tooltip={t(
                           'Allow the execution of DDL (Data Definition Language: CREATE, DROP, TRUNCATE, etc.) and DML (Data Modification Language: INSERT, UPDATE, DELETE, etc)',
-                        )}
-                      />
-                    </div>
-                  </StyledInputContainer>
-                  <StyledInputContainer css={no_margin_bottom}>
-                    <div className="input-container">
-                      <Checkbox
-                        id="cost_estimate_enabled"
-                        name="cost_estimate_enabled"
-                        indeterminate={false}
-                        checked={!!extraJson?.cost_estimate_enabled}
-                        onChange={onExtraInputChange}
-                      >
-                        {t('Enable query cost estimation')}
-                      </Checkbox>
-                      <InfoTooltip
-                        tooltip={t(
-                          'For Bigquery, Presto and Postgres, shows a button to compute cost before running a query.',
                         )}
                       />
                     </div>

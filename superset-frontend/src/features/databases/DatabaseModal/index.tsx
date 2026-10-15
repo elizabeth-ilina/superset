@@ -339,6 +339,23 @@ export function dbReducer(
       };
     }
     case ActionType.ExtraInputChange:
+      if (action.payload.name === 'cost_estimate_warning_threshold_bytes') {
+        const threshold = Number(action.payload.value);
+        const nextExtra = { ...extraJson };
+        if (
+          action.payload.value === '' ||
+          !Number.isSafeInteger(threshold) ||
+          threshold < 0
+        ) {
+          delete nextExtra.cost_estimate_warning_threshold_bytes;
+        } else {
+          nextExtra.cost_estimate_warning_threshold_bytes = threshold;
+        }
+        return {
+          ...trimmedState,
+          extra: JSON.stringify(nextExtra),
+        };
+      }
       if (
         action.payload.name === 'schema_cache_timeout' ||
         action.payload.name === 'table_cache_timeout'

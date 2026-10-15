@@ -291,6 +291,27 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
         )
 
     @property
+    def cost_estimate_warning_threshold_bytes(self) -> int | None:
+        """Return the configured SQL Lab warning threshold when active."""
+        if not app.config["SQLLAB_QUERY_COST_WARNINGS"] or not app.config[
+            "ESTIMATE_QUERY_COST"
+        ] or not self.allows_cost_estimate:
+            return None
+
+        extra = self.get_extra() or {}
+        if extra.get("cost_estimate_warning_enabled") is not True:
+            return None
+        threshold = extra.get("cost_estimate_warning_threshold_bytes")
+        if (
+            not isinstance(threshold, int)
+            or isinstance(threshold, bool)
+            or threshold < 0
+            or threshold > 2**53 - 1
+        ):
+            return None
+        return threshold
+
+    @property
     def allows_virtual_table_explore(self) -> bool:
         extra = self.get_extra()
         return bool(extra.get("allows_virtual_table_explore", True))

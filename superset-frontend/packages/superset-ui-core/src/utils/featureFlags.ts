@@ -64,6 +64,7 @@ export enum FeatureFlag {
   SemanticLayers = 'SEMANTIC_LAYERS',
   SoftDelete = 'SOFT_DELETE',
   SqllabBackendPersistence = 'SQLLAB_BACKEND_PERSISTENCE',
+  SqlLabQueryCostWarnings = 'SQLLAB_QUERY_COST_WARNINGS',
   SqlValidatorsByEngine = 'SQL_VALIDATORS_BY_ENGINE',
   SshTunneling = 'SSH_TUNNELING',
   TaggingSystem = 'TAGGING_SYSTEM',

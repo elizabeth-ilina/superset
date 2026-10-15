@@ -352,6 +352,7 @@ export function scheduleQuery(
 
 export function estimateQueryCost(
   queryEditor: QueryEditor,
+  includeRaw = false,
 ): SqlLabThunkAction<Promise<unknown[]>> {
   return (dispatch: AppDispatch, getState: GetState) => {
     const { dbId, catalog, schema, sql, selectedText, templateParams } =
@@ -364,6 +365,7 @@ export function estimateQueryCost(
       schema,
       sql: requestSql,
       template_params: JSON.parse(templateParams || '{}'),
+      ...(includeRaw ? { include_raw: true } : {}),
     };
 
     return Promise.all([
