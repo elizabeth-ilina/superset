@@ -35,6 +35,7 @@ from superset.commands.sql_lab.results import SqlExecutionResultsCommand
 from superset.commands.sql_lab.streaming_export_command import (
     StreamingSqlResultExportCommand,
 )
+from superset.commands.streaming_export.base import encode_csv_stream
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP
 from superset.daos.database import DatabaseDAO
 from superset.daos.query import QueryDAO
@@ -171,14 +172,23 @@ class SqlLabRestApi(BaseSupersetApi):
                   $ref: '#/components/schemas/EstimateQueryCostSchema'
           responses:
             200:
-              description: Query estimation result
+              description: >-
+                Formatted manual estimate, or an advisory status object when
+                check_warning is true. Warning statuses are disabled, unsupported,
+                within_threshold, exceeded, and unavailable. Active rules also return
+                metric, label, unit, value, threshold, and a short message. BigQuery
+                results retain accuracy and row_level_security_applied metadata.
               content:
                 application/json:
                   schema:
                     type: object
                     properties:
                       result:
-                        type: object
+                        oneOf:
+                          - type: array
+                            items:
+                              type: object
+                          - type: object
             400:
               $ref: '#/components/responses/400'
             401:
@@ -466,7 +476,8 @@ class SqlLabRestApi(BaseSupersetApi):
 
         # Create response with streaming headers
         response = Response(
-            csv_generator_callable(),  # Call the callable to get generator
+            # Call the callable to get generator
+            encode_csv_stream(csv_generator_callable(), encoding),
             mimetype=f"text/csv; charset={encoding}",
             headers={
                 "Content-Disposition": f'attachment; filename="{filename}"',

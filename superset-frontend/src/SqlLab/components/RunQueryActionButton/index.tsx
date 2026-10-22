@@ -16,7 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useMemo, FC, ReactElement, type ReactNode } from 'react';
+import {
+  useMemo,
+  FC,
+  ReactElement,
+  type SyntheticEvent,
+  type ReactNode,
+} from 'react';
 
 import { t } from '@apache-superset/core/translation';
 import { styled, useTheme, SupersetTheme } from '@apache-superset/core/theme';
@@ -26,6 +32,7 @@ import { Icons } from '@superset-ui/core/components/Icons';
 import { detectOS } from 'src/utils/common';
 import { QueryButtonProps } from 'src/SqlLab/types';
 import useQueryEditor from 'src/SqlLab/hooks/useQueryEditor';
+import useRunStopButton from 'src/hooks/useRunStopButton';
 import {
   LOG_ACTIONS_SQLLAB_RUN_QUERY,
   LOG_ACTIONS_SQLLAB_STOP_QUERY,
@@ -38,7 +45,11 @@ export interface RunQueryActionButtonProps {
   queryState?: string;
   runQuery: () => void;
   stopQuery: () => void;
+  runTooltipText?: string;
   overlayCreateAsMenu: ReactElement | null;
+  checkingCost?: boolean;
+  cancelCostCheck?: () => void;
+  awaitingConfirmation?: boolean;
 }
 
 const buildTextAndIcon = (
@@ -66,7 +77,7 @@ const onClick = (
   isStopAction: boolean,
   runQuery: () => void = () => undefined,
   stopQuery = () => {},
-  logAction: (name: string, payload: Record<string, any>) => void,
+  logAction: (name: string, payload: Record<string, unknown>) => void,
 ): void => {
   const eventName = isStopAction
     ? LOG_ACTIONS_SQLLAB_STOP_QUERY
@@ -76,6 +87,12 @@ const onClick = (
   if (isStopAction) return stopQuery();
   runQuery();
 };
+
+/** Only the main split button changes action; caret gestures open a menu. */
+const isMainButtonGesture = (event: SyntheticEvent<HTMLSpanElement>) =>
+  event.target instanceof Element &&
+  event.target.closest('button') ===
+    event.currentTarget.querySelector('button');
 
 const StyledButton = styled.span`
   button {
@@ -97,6 +114,10 @@ const RunQueryActionButton = ({
   overlayCreateAsMenu,
   runQuery,
   stopQuery,
+  runTooltipText,
+  checkingCost = false,
+  cancelCostCheck,
+  awaitingConfirmation = false,
 }: RunQueryActionButtonProps) => {
   const theme = useTheme();
   const logAction = useLogAction({ queryEditorId });
@@ -109,15 +130,29 @@ const RunQueryActionButton = ({
 
   const shouldShowStopBtn =
     !!queryState && ['running', 'pending'].indexOf(queryState) > -1;
+  const {
+    onPointerDownCapture,
+    onKeyDownCapture,
+    onBlurCapture,
+    onClick: handleClick,
+  } = useRunStopButton(shouldShowStopBtn, () =>
+    onClick(shouldShowStopBtn, runQuery, stopQuery, logAction),
+  );
 
-  const ButtonComponent: FC<QueryButtonProps> = overlayCreateAsMenu
+  const showMenu =
+    overlayCreateAsMenu && !checkingCost && !awaitingConfirmation;
+  const ButtonComponent: FC<QueryButtonProps> = showMenu
     ? (DropdownButton as FC)
     : Button;
 
   const sqlContent = selectedText || sql || '';
-  const isDisabled = !sqlContent
-    ?.replace(/(\/\*[^*]*\*\/)|(\/\/[^*]*)|(--[^.].*)/gm, '')
-    .trim();
+  const isDisabled =
+    !shouldShowStopBtn &&
+    (checkingCost ||
+      awaitingConfirmation ||
+      !sqlContent
+        ?.replace(/(\/\*[^*]*\*\/)|(\/\/[^*]*)|(--[^.].*)/gm, '')
+        .trim());
 
   const stopButtonTooltipText = useMemo(
     () =>
@@ -133,21 +168,27 @@ const RunQueryActionButton = ({
   );
 
   return (
-    <StyledButton>
+    <StyledButton
+      onBlurCapture={onBlurCapture}
+      onPointerDownCapture={event => {
+        if (isMainButtonGesture(event)) onPointerDownCapture(event);
+      }}
+      onKeyDownCapture={event => {
+        if (isMainButtonGesture(event)) onKeyDownCapture(event);
+      }}
+    >
       <ButtonComponent
         data-test="run-query-action"
-        onClick={() =>
-          onClick(shouldShowStopBtn, runQuery, stopQuery, logAction)
-        }
+        onClick={handleClick}
         disabled={isDisabled}
         tooltip={
           (!isDisabled &&
             (shouldShowStopBtn
               ? stopButtonTooltipText
-              : t('Run query (Ctrl + Return)'))) as string
+              : (runTooltipText ?? t('Run query (Ctrl + Return)')))) as string
         }
         cta
-        {...(overlayCreateAsMenu
+        {...(showMenu
           ? {
               popupRender: () => overlayCreateAsMenu,
               icon: (
@@ -168,9 +209,18 @@ const RunQueryActionButton = ({
               icon,
             })}
       >
-        {overlayCreateAsMenu && <>{icon}</>}
-        {text}
+        {showMenu && <>{icon}</>}
+        {checkingCost && !shouldShowStopBtn ? t('Checking cost…') : text}
       </ButtonComponent>
+      {checkingCost && (
+        <Button
+          buttonStyle="secondary"
+          onClick={cancelCostCheck}
+          tooltip={t('Cancel cost check')}
+        >
+          {t('Cancel')}
+        </Button>
+      )}
     </StyledButton>
   );
 };

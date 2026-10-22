@@ -46,6 +46,35 @@ def _make_params(**kwargs: object) -> EstimateQueryCostType:
     return base
 
 
+@pytest.mark.parametrize("engine", ["bigquery", "postgresql"])
+@patch("superset.commands.sql_lab.estimate.app")
+def test_manual_estimate_passes_native_rows_to_custom_formatter(
+    mock_app: MagicMock, engine: str
+) -> None:
+    """Configured formatters receive unmodified engine rows and own the response."""
+    formatted = [{"estimate": "custom display"}]
+    formatter = MagicMock(return_value=formatted)
+    mock_app.config = {
+        "SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT": 10,
+        "QUERY_COST_FORMATTERS_BY_ENGINE": {engine: formatter},
+    }
+    command = QueryEstimationCommand(_make_params())
+    database = MagicMock()
+    database.db_engine_spec.engine = engine
+    estimate = [{"KB Processed": 1.0} if engine == "bigquery" else {"Total cost": 12.5}]
+    database.db_engine_spec.estimate_query_cost.return_value = estimate
+    command._database = database
+    with (
+        patch.object(command, "validate"),
+        patch.object(command, "_apply_sql_security", side_effect=lambda value: value),
+    ):
+        result = command.run()
+    assert result is formatted
+    formatter.assert_called_once_with(estimate)
+    assert formatter.call_args.args[0] is estimate
+    database.db_engine_spec.query_cost_formatter.assert_not_called()
+
+
 def _security_exception() -> SupersetSecurityException:
     return SupersetSecurityException(
         SupersetError(
@@ -308,6 +337,33 @@ def test_apply_sql_security_blocks_disallowed_function(mock_app: MagicMock) -> N
     command = _make_command_with_db("SELECT pg_sleep(1)", allow_dml=True)
     with pytest.raises(SupersetDisallowedSQLFunctionException):
         command._apply_sql_security("SELECT pg_sleep(1)")
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT pg_stat_reset()",
+        "SELECT dblink_exec('host=h dbname=d', 'DELETE FROM t')",
+        "SELECT dblink_connect_u('c', 'host=h dbname=d')",
+        "SELECT dblink_send_query('c', 'DELETE FROM t')",
+        "SELECT pg_cancel_backend(1234)",
+    ],
+)
+@patch("superset.commands.sql_lab.estimate.app")
+def test_apply_sql_security_blocks_shipped_default_functions(
+    mock_app: MagicMock, sql: str
+) -> None:
+    """Shipped DISALLOWED_SQL_FUNCTIONS catches dblink and pg_* state-mutators."""
+    from superset.config import DISALLOWED_SQL_FUNCTIONS
+    from superset.exceptions import SupersetDisallowedSQLFunctionException
+
+    mock_app.config = {
+        "DISALLOWED_SQL_FUNCTIONS": DISALLOWED_SQL_FUNCTIONS,
+        "DISALLOWED_SQL_TABLES": {},
+    }
+    command = _make_command_with_db(sql, allow_dml=True)
+    with pytest.raises(SupersetDisallowedSQLFunctionException):
+        command._apply_sql_security(sql)
 
 
 @patch("superset.commands.sql_lab.estimate.app")

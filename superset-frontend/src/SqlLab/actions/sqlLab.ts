@@ -22,6 +22,7 @@ import type { AnyAction } from 'redux';
 import type { ThunkAction, ThunkDispatch } from 'redux-thunk';
 import type { QueryColumn, SupersetError } from '@superset-ui/core';
 import {
+  DatasourceType,
   FeatureFlag,
   SupersetClient,
   isFeatureEnabled,
@@ -565,34 +566,31 @@ export function runQuery(
   };
 }
 
-export function runQueryFromSqlEditor(
+/** Capture the execution inputs shared by deliberate Run and its advisory check. */
+export function getSqlEditorQuery(
   database: Database | null,
   queryEditor: QueryEditor,
   defaultQueryLimit: number,
   tempTable?: string,
   ctas?: boolean,
   ctasMethod?: string,
-): SqlLabThunkAction {
-  return function (dispatch: AppDispatch, getState: GetState) {
-    const qe = getUpToDateQuery(getState(), queryEditor, queryEditor.id);
-    const query: Query = {
-      id: nanoid(11),
-      dbId: qe.dbId,
-      sql: qe.selectedText || qe.sql,
-      sqlEditorId: qe.tabViewId ?? qe.id,
-      sqlEditorImmutableId: qe.immutableId,
-      tab: qe.name,
-      catalog: qe.catalog,
-      schema: qe.schema,
-      tempTable,
-      templateParams: qe.templateParams,
-      queryLimit: qe.queryLimit || defaultQueryLimit,
-      runAsync: database ? database.allow_run_async : false,
-      ctas,
-      ctas_method: ctasMethod,
-      updateTabState: !qe.selectedText,
-    };
-    dispatch(runQuery(query));
+): Query {
+  return {
+    id: nanoid(11),
+    dbId: queryEditor.dbId,
+    sql: queryEditor.selectedText || queryEditor.sql,
+    sqlEditorId: queryEditor.tabViewId ?? queryEditor.id,
+    sqlEditorImmutableId: queryEditor.immutableId,
+    tab: queryEditor.name,
+    catalog: queryEditor.catalog,
+    schema: queryEditor.schema,
+    tempTable,
+    templateParams: queryEditor.templateParams,
+    queryLimit: queryEditor.queryLimit || defaultQueryLimit,
+    runAsync: database ? database.allow_run_async : false,
+    ctas,
+    ctas_method: ctasMethod,
+    updateTabState: !queryEditor.selectedText,
   };
 }
 
@@ -601,6 +599,12 @@ export function reRunQuery(query: Query): SqlLabThunkAction {
   return function (dispatch: AppDispatch) {
     dispatch(runQuery({ ...query, id: nanoid(11) }));
   };
+}
+
+export function refreshQueries(
+  alteredQueries: Record<string, Query>,
+): SqlLabAction {
+  return { type: REFRESH_QUERIES, alteredQueries };
 }
 
 export function postStopQuery(
@@ -614,7 +618,25 @@ export function postStopQuery(
     })
       .then(() => dispatch(stopQuery(query)))
       .then(() => dispatch(addSuccessToast(t('Query was stopped.'))))
-      .catch(() => dispatch(addDangerToast(t('Failed to stop query.'))));
+      .catch(async (response: Response) => {
+        if (response.status === 422) {
+          const payload: { query?: Query } = await response
+            .json()
+            .catch(() => ({}));
+          const finishedQuery = payload.query;
+          if (
+            finishedQuery &&
+            finishedQuery.id === query.id &&
+            ['success', 'failed', 'timed_out'].includes(
+              finishedQuery.state ?? '',
+            )
+          ) {
+            dispatch(refreshQueries({ [query.id]: finishedQuery }));
+            return;
+          }
+        }
+        dispatch(addDangerToast(t('Failed to stop query.')));
+      });
   };
 }
 
@@ -823,9 +845,11 @@ export function addNewQueryEditor(): SqlLabThunkAction<SqlLabAction> {
   };
 }
 
+/** Clone with existing effective settings and optional deliberate-run intent. */
 export function cloneQueryToNewTab(
   query: Query,
   autorun: boolean,
+  autorunSource?: QueryEditor['autorunSource'],
 ): SqlLabThunkAction<SqlLabAction> {
   return function (dispatch: AppDispatch, getState: GetState) {
     const state = getState();
@@ -843,6 +867,7 @@ export function cloneQueryToNewTab(
       catalog: query.catalog,
       schema: query.schema ?? undefined,
       autorun,
+      ...(autorunSource && { autorunSource }),
       sql: query.sql,
       queryLimit: sourceQueryEditor.queryLimit,
       templateParams: sourceQueryEditor.templateParams,
@@ -1519,12 +1544,6 @@ export function removeTables(
   };
 }
 
-export function refreshQueries(
-  alteredQueries: Record<string, Query>,
-): SqlLabAction {
-  return { type: REFRESH_QUERIES, alteredQueries };
-}
-
 export function setUserOffline(offline: boolean): SqlLabAction {
   return { type: SET_USER_OFFLINE, offline };
 }
@@ -1643,7 +1662,40 @@ export function popDatasourceQuery(
 ): SqlLabThunkAction<Promise<unknown>> {
   return function (dispatch: AppDispatch) {
     const QUERY_TEXT = t('Query');
-    const datasetId = datasourceKey.split('__')[0];
+    const [datasetId, datasourceType] = datasourceKey.split('__');
+
+    // The id of a `query` datasource is a SQL Lab query id, not a dataset id.
+    if (datasourceType === DatasourceType.Query) {
+      return SupersetClient.get({
+        endpoint: `/fetch_datasource_metadata?datasourceKey=${encodeURIComponent(datasourceKey)}`,
+      })
+        .then(({ json }) =>
+          dispatch(
+            addQueryEditor({
+              name: json.name ? `${QUERY_TEXT} ${json.name}` : QUERY_TEXT,
+              dbId: json.database.id,
+              catalog: json.catalog,
+              schema: json.schema,
+              autorun: false,
+              sql: sql || json.sql,
+            }),
+          ),
+        )
+        .catch(() =>
+          dispatch(addDangerToast(t("The datasource couldn't be loaded"))),
+        );
+    }
+
+    // Only tables are looked up as datasets; other typed keys (for example
+    // semantic views) have no dataset to open an editor from.
+    if (
+      datasourceType !== undefined &&
+      datasourceType !== DatasourceType.Table
+    ) {
+      return Promise.resolve(
+        dispatch(addDangerToast(t("The datasource couldn't be loaded"))),
+      );
+    }
 
     const queryParams = rison.encode({
       keys: ['none'],

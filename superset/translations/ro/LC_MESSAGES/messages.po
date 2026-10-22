@@ -22,7 +22,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Superset VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-07 14:21-0300\n"
+"POT-Creation-Date: 2026-10-19 13:00-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -1210,6 +1210,12 @@ msgstr "Un grafic nou va fi creat."
 msgid "A new dashboard will be created."
 msgstr "Un panou de control va fi creat."
 
+#, python-format
+msgid ""
+"A password reset was requested for the %(app_name)s account "
+"\"%(username)s\"."
+msgstr ""
+
 msgid ""
 "A polar coordinate chart where the circle is broken into wedges of equal "
 "angle, and the value represented by any wedge is illustrated by its area,"
@@ -1231,6 +1237,11 @@ msgid "A reusable dataset will be saved with your chart."
 msgstr "Un set de date reutilizabil va fi salvat cu graficul dvs."
 
 msgid "A rule with this name already exists."
+msgstr ""
+
+msgid ""
+"A semantic query filter is invalid. Check its operator and values, then "
+"try again."
 msgstr ""
 
 msgid ""
@@ -1691,12 +1702,12 @@ msgstr ""
 msgid "Added '%s' dimension"
 msgstr ""
 
-#, python-format
-msgid "Added 1 new column to the virtual dataset"
-msgid_plural "Added %s new columns to the virtual dataset"
-msgstr[0] "Adăugată %s coloană nouă la setul de date virtual"
-msgstr[1] "Adăugate %s coloane noi la setul de date virtual"
-msgstr[2] "Adăugate %s de coloane noi la setul de date virtual"
+#, fuzzy, python-format
+msgid "Added 1 new column to the dataset"
+msgid_plural "Added %s new columns to the dataset"
+msgstr[0] "Adăugată %s coloană nouă la setul de date"
+msgstr[1] "Adăugate %s coloane noi la setul de date"
+msgstr[2] "Adăugate %s de coloane noi la setul de date"
 
 #, python-format
 msgid "Added a %s"
@@ -2122,6 +2133,9 @@ msgstr "A Apărut o Eroare"
 msgid "An alert named \"%(name)s\" already exists"
 msgstr "Există deja o alertă numită \"%(name)s\""
 
+msgid "An enabled query cost warning requires this field."
+msgstr ""
+
 msgid ""
 "An enclosed time range (both start and end) must be specified when using "
 "a Time Comparison."
@@ -2421,12 +2435,6 @@ msgstr "A apărut o eroare la analizarea cheii."
 
 msgid "An error occurred while pruning logs "
 msgstr "A apărut o eroare la curățarea jurnalelor "
-
-# Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: de, it, ja,
-# sr, sr_Latn]
-#, fuzzy
-msgid "An error occurred while refreshing the configuration schema"
-msgstr "A apărut o eroare la reîmprospătarea schemei de configurare"
 
 msgid "An error occurred while refreshing the runtime schema"
 msgstr ""
@@ -3047,6 +3055,9 @@ msgstr "Înapoi"
 msgid "Back to all"
 msgstr "Înapoi la toate"
 
+msgid "Back to sign in"
+msgstr ""
+
 #. i18n: the kind of system behind a connection: a database engine
 #. (PostgreSQL, MySQL) or a semantic layer; not a server tier or a driver
 msgid "Backend"
@@ -3336,6 +3347,9 @@ msgstr "După cheie: folosește numele rândurilor ca cheie de sortare"
 msgid "By value: use metric values as sorting key"
 msgstr "După valoare: utilizează valorile indicatorului ca cheie de sortare"
 
+msgid "Bytes"
+msgstr ""
+
 msgid "CC recipients"
 msgstr "Destinatari CC"
 
@@ -3435,6 +3449,9 @@ msgstr ""
 msgid "Cache Timeout (seconds)"
 msgstr "Expirare Cache (secunde)"
 
+msgid "Cache cleared; reload to fetch metadata"
+msgstr ""
+
 msgid ""
 "Cache data separately for each user based on their data access roles and "
 "permissions. When disabled, a single cache will be used for all users."
@@ -3496,6 +3513,9 @@ msgstr "Anulează"
 #, fuzzy
 msgid "Cancel Task"
 msgstr "Anulare sarcină"
+
+msgid "Cancel cost check"
+msgstr ""
 
 msgid "Cancel query on window unload event"
 msgstr "Anulează interogarea la evenimentul de descărcare a ferestrei"
@@ -3949,6 +3969,10 @@ msgstr "Titlu grafic"
 msgid "Chart type"
 msgstr "Tip grafic"
 
+#, python-format
+msgid "Chart updated: %s"
+msgstr ""
+
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: de, fr, it,
 # ja, lv, ru, sr, sr_Latn, uk]
 #, fuzzy
@@ -4007,7 +4031,13 @@ msgstr "Verifică acest panou de control: "
 msgid "Check to force date partitions to have the same height"
 msgstr "Bifează pentru a forța partițiile de dată să aibă aceeași înălțime"
 
+msgid "Check your email"
+msgstr ""
+
 msgid "Checking charts and dashboards that use this dataset…"
+msgstr ""
+
+msgid "Checking cost…"
 msgstr ""
 
 msgid "Checking for affected charts and dashboards…"
@@ -4036,6 +4066,9 @@ msgstr "Alege un delimitator"
 
 msgid "Choose a metric for right axis"
 msgstr "Alege un indicator pentru axa din dreapta"
+
+msgid "Choose a new password"
+msgstr ""
 
 msgid "Choose a number format"
 msgstr "Alege un format de număr"
@@ -4321,6 +4354,9 @@ msgstr "Închide editorul punctului de întrerupere de culoare"
 msgid "Close preview"
 msgstr ""
 
+msgid "Close price"
+msgstr ""
+
 msgid "Close tab"
 msgstr "Închide filă"
 
@@ -4369,6 +4405,9 @@ msgstr "Restrânge panoul de date"
 
 msgid "Collapse row"
 msgstr "Restrânge rând"
+
+msgid "Collapse rows by default"
+msgstr ""
 
 msgid "Collapse settings"
 msgstr "Restrânge setările"
@@ -5045,6 +5084,10 @@ msgstr ""
 msgid "Could not connect to database: \"%(database)s\""
 msgstr "Nu s-a putut conecta la baza de date: \"%(database)s\""
 
+#, python-format
+msgid "Could not delete semantic views %s: %s"
+msgstr ""
+
 msgid "Could not fetch all saved charts"
 msgstr "Nu s-au putut prelua toate graficele salvate"
 
@@ -5074,6 +5117,11 @@ msgid ""
 " and try again."
 msgstr ""
 
+msgid ""
+"Could not refresh metadata. Check the connection details and your "
+"permissions."
+msgstr ""
+
 #, python-format
 msgid "Could not resolve hostname: \"%(host)s\"."
 msgstr "Nu s-a putut rezolva numele de gazdă: \"%(host)s\"."
@@ -5097,6 +5145,12 @@ msgstr "Numără"
 
 msgid "Country"
 msgstr "Țară"
+
+#, python-format
+msgid ""
+"Country %s has no world-map boundary; enable bubbles or filter the "
+"dataset."
+msgstr ""
 
 msgid "Country Color Scheme"
 msgstr "Schemă Culori Țară"
@@ -5603,6 +5657,10 @@ msgstr "Titlu panou de control"
 msgid "Dashboard updated %s"
 msgstr "Tabloul de bord actualizat %s"
 
+#, python-format
+msgid "Dashboard updated: %s"
+msgstr ""
+
 msgid "Dashboard usage"
 msgstr "Utilizare panou de control"
 
@@ -5861,6 +5919,10 @@ msgstr ""
 #, python-format
 msgid "Dataset schema is invalid, caused by: %(error)s"
 msgstr "Schema setului de date este invalidă, cauzată de: %(error)s"
+
+#, python-format
+msgid "Dataset updated: %s"
+msgstr ""
 
 #, python-format
 msgid "Dataset used by %s chart updated: %s"
@@ -6572,6 +6634,9 @@ msgstr "Dezactivează drill to detail"
 
 msgid "Disable embedding?"
 msgstr "Dezactivează încorporarea?"
+
+msgid "Disable saved rule"
+msgstr ""
 
 msgid "Disabled"
 msgstr "Dezactivat"
@@ -7353,8 +7418,16 @@ msgstr "Activează matrixify"
 msgid "Enable node dragging"
 msgstr "Activează tragerea nodurilor"
 
+msgid "Enable pre-run cost warnings"
+msgstr ""
+
 msgid "Enable query cost estimation"
 msgstr "Activează estimarea costului interogării"
+
+msgid ""
+"Enable query cost estimation to activate pre-run warnings. Saved settings"
+" are retained."
+msgstr ""
 
 msgid "Enable row expansion in schemas"
 msgstr "Activează extinderea rândurilor în scheme"
@@ -7451,8 +7524,19 @@ msgstr ""
 msgid "Enter a part of the object name"
 msgstr "Introduceți o parte din numele obiectului"
 
+msgid "Enter a positive, finite warning threshold."
+msgstr ""
+
+msgid "Enter a warning threshold."
+msgstr ""
+
 msgid "Enter alert name"
 msgstr "Introduceți numele alertei"
+
+msgid ""
+"Enter an amount that equals positive whole bytes, no greater than "
+"9,007,199,254,740,991."
+msgstr ""
 
 msgid "Enter duration in seconds"
 msgstr "Introduceți durata în secunde"
@@ -7468,6 +7552,11 @@ msgstr "Introduceți valorile minime și maxime pentru filtrul de interval"
 
 msgid "Enter report name"
 msgstr "Introduceți numele raportului"
+
+msgid ""
+"Enter the email address of your account and we will send you a link to "
+"reset your password."
+msgstr ""
 
 msgid "Enter the group's description"
 msgstr "Introduceți descrierea grupului"
@@ -7507,6 +7596,9 @@ msgid "Enter theme name"
 msgstr "Introduceți numele temei"
 
 msgid "Enter values"
+msgstr ""
+
+msgid "Enter whole bytes, no greater than 9,007,199,254,740,991."
 msgstr ""
 
 msgid "Enter your current password"
@@ -7670,6 +7762,20 @@ msgstr "Estimează costul interogării selectate"
 
 msgid "Estimate the cost before running a query"
 msgstr "Estimează costul înainte de a rula o interogare"
+
+msgid "Estimated bytes processed"
+msgstr ""
+
+msgid "Estimated planner cost"
+msgstr ""
+
+msgid "Estimated usage, not a guaranteed bill."
+msgstr ""
+
+msgid ""
+"Estimated usage, not a guaranteed bill. 1 MB = 1,000,000 bytes; 1 GB = "
+"1,000,000,000 bytes."
+msgstr ""
 
 msgid "Event"
 msgstr "Eveniment"
@@ -8098,6 +8204,9 @@ msgstr "Eșuat la încărcarea datelor graficului."
 msgid "Failed to load columns for %s %s"
 msgstr "Încărcarea coloanelor pentru %s %s a eșuat"
 
+msgid "Failed to load datasource metadata"
+msgstr ""
+
 #, python-format
 msgid "Failed to load dimensions for semantic view %s"
 msgstr ""
@@ -8332,6 +8441,12 @@ msgstr ""
 msgid "Filter charts"
 msgstr "Filtrează grafice"
 
+#, python-format
+msgid ""
+"Filter column '%(column)s' is a metric; semantic views only filter on "
+"dimensions"
+msgstr ""
+
 msgid "Filter has default value"
 msgstr "Filtrul are valoare implicită"
 
@@ -8364,6 +8479,10 @@ msgstr "Valoare filtru (sensibilă la majuscule)"
 msgid "Filter value is required"
 msgstr "Valoarea filtrului este obligatorie"
 
+#, python-format
+msgid "Filter value is required for the IN / NOT IN operator on column %(column)s"
+msgstr ""
+
 msgid "Filter value list cannot be empty"
 msgstr "Lista valorilor filtrului nu poate fi goală"
 
@@ -8375,6 +8494,10 @@ msgstr "Filtrează graficele tale"
 
 msgid "Filters"
 msgstr "Filtre"
+
+#, python-format
+msgid "Filters (%s)"
+msgstr ""
 
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: de, it, ja,
 # lv, ru, sr, sr_Latn, uk]
@@ -8459,6 +8582,9 @@ msgid "Fit data"
 msgstr "Ajustare la date"
 
 msgid "Fix the Extra JSON to edit certification"
+msgstr ""
+
+msgid "Fix the query cost warning settings in Advanced."
 msgstr ""
 
 msgid ""
@@ -8604,6 +8730,12 @@ msgstr "Cheie străină"
 
 msgid "Forest Green"
 msgstr "Verde Pădure"
+
+msgid "Forgot password"
+msgstr ""
+
+msgid "Forgot password?"
+msgstr ""
 
 msgid "Form data not found in cache, reverting to chart metadata."
 msgstr "Date formular nu găsite în cache, revenire la metadatele graficului."
@@ -8784,7 +8916,7 @@ msgstr "Coloană Geometrie"
 msgid "Get the last date by the date unit."
 msgstr "Obține ultima dată după unitatea de dată."
 
-msgid "Get the specify date for the holiday"
+msgid "Get the specified date for the holiday"
 msgstr "Obține data specificată pentru sărbătoare"
 
 msgid "Give access to multiple catalogs in a single database connection."
@@ -8976,10 +9108,10 @@ msgstr "Ascunde Linia pentru seria temporală"
 msgid "Hierarchy"
 msgstr "Ierarhie"
 
-msgid "High"
+msgid "High color"
 msgstr ""
 
-msgid "High color"
+msgid "High price"
 msgstr ""
 
 msgid "Highest value for each period."
@@ -9103,6 +9235,15 @@ msgstr ""
 "acestuia"
 
 msgid ""
+"If an account exists for that email address, a link to reset your "
+"password has been sent to it. If no email arrives, check your spam folder"
+" or contact your administrator."
+msgstr ""
+
+msgid "If an account with that email exists, a password reset link has been sent."
+msgstr ""
+
+msgid ""
 "If enabled, this control sorts the results/values descending, otherwise "
 "it sorts the results ascending."
 msgstr ""
@@ -9123,6 +9264,11 @@ msgid "If table already exists"
 msgstr "Dacă tabelul există deja"
 
 msgid "If you delete this item, you won't be able to recover it."
+msgstr ""
+
+msgid ""
+"If you did not request a password reset, you can ignore this email; your "
+"password will not change."
 msgstr ""
 
 msgid "If you did not request this, you can ignore this email."
@@ -9246,11 +9392,18 @@ msgstr ""
 msgid "Include description to be sent with %s"
 msgstr "Include descriere de trimis cu %s"
 
+msgid "Include matching BEGIN and END private key lines."
+msgstr ""
+
 msgid "Include series name as an axis"
 msgstr "Include numele seriei ca axă"
 
 msgid "Include time"
 msgstr "Include timpul"
+
+#, python-format
+msgid "Incompatible filters (%d)"
+msgstr ""
 
 msgid "Increase"
 msgstr "Creștere"
@@ -9545,6 +9698,9 @@ msgstr "Tip rezultat invalid: %(result_type)s"
 #, python-format
 msgid "Invalid rolling_type: %(type)s"
 msgstr "rolling_type invalid: %(type)s"
+
+msgid "Invalid semantic result cache version"
+msgstr ""
 
 msgid "Invalid state."
 msgstr "Stare invalidă."
@@ -9935,6 +10091,9 @@ msgstr "Tip aspect de arbore"
 msgid "Least recently modified"
 msgstr "Cel mai puțin modificat recent"
 
+msgid "Leave a bound empty for an unbounded range."
+msgstr ""
+
 msgid "Leave blank to keep the current password"
 msgstr ""
 
@@ -10215,6 +10374,9 @@ msgstr "Date încărcate cache-uite"
 msgid "Loaded from cache"
 msgstr "Încărcat din cache"
 
+msgid "Loaded from semantic cache"
+msgstr ""
+
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: de, it, ja,
 # sr, sr_Latn, tr]
 #, fuzzy
@@ -10316,10 +10478,10 @@ msgstr "Longitudine și Latitudine"
 msgid "Longitude of default viewport"
 msgstr "Longitudinea viewport-ului implicit"
 
-msgid "Low"
+msgid "Low color"
 msgstr ""
 
-msgid "Low color"
+msgid "Low price"
 msgstr ""
 
 msgid "Lower Threshold"
@@ -10328,6 +10490,10 @@ msgstr "Prag Inferior"
 msgid ""
 "Lower bound of the color scale. When both start and end are set, the "
 "legend uses this fixed range instead of the automatic data range."
+msgstr ""
+
+#, python-format
+msgid "Lower the row limit to SQL_MAX_ROW (%s) or less."
 msgstr ""
 
 msgid "Lower threshold must be lower than upper threshold"
@@ -10907,6 +11073,9 @@ msgstr "Parametri URL lipsă"
 msgid "Mixed Chart"
 msgstr "Grafic Mixt"
 
+msgid "Mixed cache"
+msgstr ""
+
 msgid "Modified"
 msgstr "Modificat"
 
@@ -10918,12 +11087,12 @@ msgstr ""
 msgid "Modified %s"
 msgstr "Modificat %s"
 
-#, python-format
-msgid "Modified 1 column in the virtual dataset"
-msgid_plural "Modified %s columns in the virtual dataset"
-msgstr[0] "Modificată %s coloană în setul de date virtual"
-msgstr[1] "Modificate %s coloane în setul de date virtual"
-msgstr[2] "Modificate %s de coloane în setul de date virtual"
+#, fuzzy, python-format
+msgid "Modified 1 column in the dataset"
+msgid_plural "Modified %s columns in the dataset"
+msgstr[0] "Modificată %s coloană în setul de date"
+msgstr[1] "Modificate %s coloane în setul de date"
+msgstr[2] "Modificate %s de coloane în setul de date"
 
 msgid "Modified by"
 msgstr "Modificat de"
@@ -11757,6 +11926,9 @@ msgstr "Unul sau mai mulți indicatori de afișat"
 msgid "One or more annotation layers failed loading."
 msgstr "Unul sau mai multe straturi de adnotare au eșuat la încărcare."
 
+msgid "One or more chart-data queries failed"
+msgstr ""
+
 msgid "One or more columns already exist"
 msgstr "Una sau mai multe coloane există deja"
 
@@ -11839,6 +12011,12 @@ msgstr ""
 
 #, python-format
 msgid ""
+"Only the first %s values are listed. Enter a value manually if it is not "
+"listed."
+msgstr ""
+
+#, python-format
+msgid ""
 "Only the first %s values are listed. Type to search all of them, or enter"
 " a value that is not listed."
 msgstr ""
@@ -11863,9 +12041,6 @@ msgstr "Opacitatea bulelor, 0 înseamnă complet transparent, 1 înseamnă opac"
 
 msgid "Opacity, expects values between 0 and 100"
 msgstr "Opacitate, se așteaptă valori între 0 și 100"
-
-msgid "Open"
-msgstr ""
 
 msgid "Open Datasource tab"
 msgstr "Deschide fila Sursă de Date"
@@ -11900,6 +12075,9 @@ msgstr "Deschide în SQL Lab"
 
 msgid "Open in SQL lab"
 msgstr "Deschide în SQL lab"
+
+msgid "Open price"
+msgstr ""
 
 msgid "Open query in SQL Lab"
 msgstr "Deschide interogare în SQL Lab"
@@ -12439,6 +12617,9 @@ msgstr "Pixeli"
 msgid "Plain"
 msgstr "Simplu"
 
+msgid "Planner cost is relative, not dollars or memory."
+msgstr ""
+
 msgid ""
 "Please check your query and confirm that all template parameters are "
 "surround by double braces, for example, \"{{ ds }}\". Then, try running "
@@ -12709,6 +12890,11 @@ msgstr ""
 msgid "Preparing export…"
 msgstr ""
 
+msgid ""
+"Preserves the generated dashboard-time predicate subject through Explore "
+"saves."
+msgstr ""
+
 msgid "Preview"
 msgstr "Previzualizare"
 
@@ -12856,6 +13042,12 @@ msgstr "Istoric interogări"
 #, fuzzy
 msgid "Query State"
 msgstr "Starea interogării"
+
+msgid "Query cost check failed."
+msgstr ""
+
+msgid "Query cost warning"
+msgstr ""
 
 msgid "Query data in SQL Lab"
 msgstr "Interogare date în SQL Lab"
@@ -13123,6 +13315,9 @@ msgstr "Reîncarcă"
 msgid "Reload SQL Lab"
 msgstr "Reîncărcați SQL Lab"
 
+msgid "Reload metadata"
+msgstr ""
+
 msgid "Reload the page and try again to continue."
 msgstr ""
 
@@ -13186,12 +13381,12 @@ msgstr ""
 msgid "Removed '%s' metric"
 msgstr ""
 
-#, python-format
-msgid "Removed 1 column from the virtual dataset"
-msgid_plural "Removed %s columns from the virtual dataset"
-msgstr[0] "Eliminată %s coloană din setul de date virtual"
-msgstr[1] "Eliminate %s coloane din setul de date virtual"
-msgstr[2] "Eliminate %s de coloane din setul de date virtual"
+#, fuzzy, python-format
+msgid "Removed 1 column from the dataset"
+msgid_plural "Removed %s columns from the dataset"
+msgstr[0] "Eliminată %s coloană din setul de date"
+msgstr[1] "Eliminate %s coloane din setul de date"
+msgstr[2] "Eliminate %s de coloane din setul de date"
 
 #, python-format
 msgid "Removed a %s"
@@ -13383,6 +13578,12 @@ msgstr "Intensitate repulsie între noduri"
 msgid "Request Access"
 msgstr "Solicită acces"
 
+msgid "Request a new link"
+msgstr ""
+
+msgid "Request a new link to reset your password."
+msgstr ""
+
 msgid "Request access"
 msgstr ""
 
@@ -13468,6 +13669,10 @@ msgstr "Resetează starea"
 #, fuzzy
 msgid "Reset to default folders?"
 msgstr "Resetați la folderele implicite?"
+
+#, python-format
+msgid "Reset your %(app_name)s password"
+msgstr ""
 
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: de, fr, it,
 # ja, lv, ru, sr, sr_Latn, uk]
@@ -13784,6 +13989,9 @@ msgstr ""
 msgid "Run alert query as type"
 msgstr ""
 
+msgid "Run anyway"
+msgstr ""
+
 msgid "Run as"
 msgstr ""
 
@@ -13802,11 +14010,18 @@ msgstr "Rulează interogare"
 msgid "Run query (Ctrl + Return)"
 msgstr "Rulează interogare (Ctrl + Return)"
 
+#, python-format
+msgid "Run query (Ctrl + Return). Cost warnings enabled. %s: %s."
+msgstr ""
+
 msgid "Run query in a new tab"
 msgstr "Rulează interogare într-un tab nou"
 
 msgid "Run selection"
 msgstr "Rulează selecția"
+
+msgid "Run without estimate"
+msgstr ""
 
 msgid "Running"
 msgstr "Rulează"
@@ -13871,6 +14086,11 @@ msgstr ""
 
 msgid "SQL Query"
 msgstr "Interogare SQL"
+
+msgid ""
+"SQL WHERE/HAVING expressions are not supported for semantic views. Remove"
+" the SQL clause or use a semantic dimension filter."
+msgstr ""
 
 msgid "SQL expression"
 msgstr "Expresie SQL"
@@ -14081,6 +14301,11 @@ msgid ""
 "datasource metadata or MCP list_metrics."
 msgstr ""
 
+msgid ""
+"Saved warning settings are invalid. Turn warnings off to clear invalid "
+"fields."
+msgstr ""
+
 msgid "Saving..."
 msgstr "Se salvează..."
 
@@ -14177,6 +14402,13 @@ msgstr ""
 msgid "Search"
 msgstr "Caută"
 
+#, python-format
+msgid "Search %s record"
+msgid_plural "Search %s records"
+msgstr[0] "Caută %s înregistrare"
+msgstr[1] "Caută %s înregistrări"
+msgstr[2] "Caută %s de înregistrări"
+
 msgid "Search / Filter"
 msgstr "Caută / Filtrează"
 
@@ -14245,9 +14477,6 @@ msgstr "Caută în filtre"
 #, fuzzy
 msgid "Search metrics by key or label"
 msgstr "Căutați metrici după cheie sau etichetă"
-
-msgid "Search records"
-msgstr ""
 
 msgid "Search tags"
 msgstr "Caută etichete"
@@ -14856,6 +15085,15 @@ msgstr "Vizualizare semantică"
 msgid "Semantic Views"
 msgstr "Vizualizări semantice"
 
+msgid "Semantic cache"
+msgstr ""
+
+#, python-format
+msgid ""
+"Semantic dimension '%(name)s' has ambiguous variants for grain "
+"'%(grain)s'. Use one dimension per name and grain."
+msgstr ""
+
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: de, it, ja,
 # sr, sr_Latn]
 #, fuzzy
@@ -14909,6 +15147,17 @@ msgstr "Tipul stratului semantic"
 #, fuzzy
 msgid "Semantic layer updated"
 msgstr "Strat semantic actualizat"
+
+#, python-format
+msgid ""
+"Semantic source is used by %(count)s dependent asset and cannot be "
+"deleted."
+msgid_plural ""
+"Semantic source is used by %(count)s dependent assets and cannot be "
+"deleted."
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
 
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: de, it, ja,
 # sr, sr_Latn]
@@ -14972,6 +15221,9 @@ msgstr "Trimite ca PNG"
 
 msgid "Send as text"
 msgstr "Trimite ca text"
+
+msgid "Send reset link"
+msgstr ""
 
 msgid "Send the failed report to all recipients after retries are exhausted"
 msgstr ""
@@ -15409,6 +15661,9 @@ msgstr "Afișează rezumat"
 msgid "Show the main ticks on axes."
 msgstr ""
 
+msgid "Show the numbers along the value axis."
+msgstr ""
+
 msgid "Show total"
 msgstr "Afișează total"
 
@@ -15488,6 +15743,9 @@ msgstr "Autentificare"
 
 msgid "Sign in with"
 msgstr "Autentificare cu"
+
+msgid "Sign in with your new password."
+msgstr ""
 
 msgid "Significance Level"
 msgstr "Nivel de semnificație"
@@ -15658,6 +15916,9 @@ msgstr ""
 
 msgid "Something went wrong."
 msgstr "Ceva a mers greșit."
+
+msgid "Something went wrong. Please try again later."
+msgstr ""
 
 #, python-format
 msgid "Sorry there was an error fetching database information: %s"
@@ -15921,6 +16182,11 @@ msgid ""
 "Start field selection using current member IDs. This clears any existing "
 "query and formatting settings. Saved display titles cannot be safely "
 "mapped to member IDs. The saved chart is unchanged until you save."
+msgstr ""
+
+msgid ""
+"Start with row groups collapsed when row subtotals are shown. Each group "
+"can still be expanded with its arrow."
 msgstr ""
 
 msgid "Start y-axis at 0"
@@ -16672,6 +16938,10 @@ msgstr ""
 "filtrele de interval de timp din panourile de control. Doriți să o "
 "adăugați în lista de filtre?"
 
+#, python-format
+msgid "The `%(field)s` field must be a string."
+msgstr ""
+
 msgid ""
 "The affected charts or dashboards changed. Review the updated impact and "
 "type DELETE again to continue."
@@ -16965,6 +17235,17 @@ msgstr ""
 "Obiectul engine_params este despachetat în apelul "
 "sqlalchemy.create_engine."
 
+msgid "The estimate exceeds this connection's warning threshold."
+msgstr ""
+
+msgid ""
+"The estimate is unavailable or cannot establish whether usage is within "
+"the warning threshold."
+msgstr ""
+
+msgid "The estimate is within this connection's warning threshold."
+msgstr ""
+
 msgid "The exponent to compute all sizes from. \"EXP\" only"
 msgstr "Exponentul pentru calcularea tuturor dimensiunilor. Doar \"EXP\""
 
@@ -17243,6 +17524,9 @@ msgstr[0] "Parametrul %(parameters)s din interogarea dvs. este nedefinit."
 msgstr[1] "Următorii parametri din interogarea dvs. sunt nedefiniți: %(parameters)s."
 msgstr[2] "Următorii parametri din interogarea dvs. sunt nedefiniți: %(parameters)s."
 
+msgid "The password could not be reset. Please try again."
+msgstr ""
+
 #, python-format
 msgid "The password provided for username \"%(username)s\" is incorrect."
 msgstr ""
@@ -17384,6 +17668,26 @@ msgid ""
 "properly configured and has a valid query context."
 msgstr ""
 
+msgid "The query cost estimate timed out."
+msgstr ""
+
+msgid "The query cost warning enabled setting must be a boolean."
+msgstr ""
+
+msgid "The query cost warning metric is not supported by this engine."
+msgstr ""
+
+msgid "The query cost warning response was invalid."
+msgstr ""
+
+msgid "The query cost warning threshold must be a positive finite number."
+msgstr ""
+
+msgid ""
+"The query cost warning threshold must be whole bytes no greater than "
+"9007199254740991."
+msgstr ""
+
 msgid "The query couldn't be loaded"
 msgstr "Interogarea nu a putut fi încărcată"
 
@@ -17497,6 +17801,14 @@ msgstr ""
 msgid "The sample row limit was reached. This %s may contain more rows."
 msgstr ""
 
+msgid "The saved query cost warning rule is invalid."
+msgstr ""
+
+msgid ""
+"The saved warning metric is not supported by this engine. Turn warnings "
+"off or enter a new threshold."
+msgstr ""
+
 #, python-format
 msgid ""
 "The schema \"%(schema)s\" does not exist. A valid schema must be used to "
@@ -17538,6 +17850,26 @@ msgstr "Captura de ecran este generată. Vă rugăm, nu părăsiți pagina."
 msgid ""
 "The selected %s are linked to %s on %s. Deleting them will break those "
 "objects."
+msgstr ""
+
+msgid ""
+"The semantic layer could not verify that this query result is complete. "
+"Retry the query; if it continues, ask an administrator to check the "
+"semantic-layer connection."
+msgstr ""
+
+msgid ""
+"The semantic layer returned only part of this query result. Narrow the "
+"time range or selected dimensions, or request a smaller explicit row "
+"limit, then retry. Result pagination is not supported yet."
+msgstr ""
+
+msgid ""
+"The semantic query is invalid. Check its fields and options, then try "
+"again."
+msgstr ""
+
+msgid "The semantic-layer provider is unavailable."
 msgstr ""
 
 msgid "The service url of the layer"
@@ -17737,6 +18069,9 @@ msgstr "Versiunea serviciului"
 
 msgid "The visible title of the layer"
 msgstr "Titlul vizibil al stratului"
+
+msgid "The warning metric is not supported by this engine."
+msgstr ""
 
 msgid "The way the ticks are laid out on the X-axis"
 msgstr "Modul în care gradațiile sunt aranjate pe axa X"
@@ -18242,6 +18577,18 @@ msgstr ""
 msgid "This chart only"
 msgstr ""
 
+msgid ""
+"This chart version can't be restored because the dataset it used has been"
+" permanently deleted. Restore a version that uses an existing dataset, or"
+" recreate the chart."
+msgstr ""
+
+msgid ""
+"This chart version can't be restored because the semantic view it used "
+"has been permanently deleted. Restore a version that uses an existing "
+"semantic view or dataset, or recreate the chart."
+msgstr ""
+
 msgid "This chart will be restored to the following version:"
 msgstr ""
 
@@ -18407,6 +18754,9 @@ msgid ""
 "one."
 msgstr "Acest email este deja asociat cu un cont. Vă rugăm să alegeți altul."
 
+msgid "This engine does not support pre-run warnings."
+msgstr ""
+
 #, python-format
 msgid "This export was requested on %(when)s UTC."
 msgstr ""
@@ -18534,6 +18884,10 @@ msgstr ""
 "control. Este generat dinamic când se ajustează dimensiunea și pozițiile "
 "widget-urilor folosind drag & drop în vizualizarea panoului de control."
 
+#, python-format
+msgid "This link can be used once and expires in %(minutes)s minutes."
+msgstr ""
+
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: ja]
 #, fuzzy
 msgid "This link cannot be followed because its address is unsafe."
@@ -18608,6 +18962,12 @@ msgstr ""
 "Această parolă este prea comună; vă rugăm să alegeți una mai greu de "
 "ghicit."
 
+msgid "This password reset link is invalid or has expired"
+msgstr ""
+
+msgid "This password reset link is invalid or has expired."
+msgstr ""
+
 msgid ""
 "This saved filter state predates the member-ID format. Reset it and "
 "explicitly choose its values again."
@@ -18637,6 +18997,19 @@ msgid "This section contains validation errors"
 msgstr "Această secțiune conține erori de validare"
 
 msgid "This semantic layer has no dependent semantic views."
+msgstr ""
+
+msgid ""
+"This semantic provider cannot apply the requested offset. Turn off "
+"pagination or use a supported limit and offset."
+msgstr ""
+
+msgid ""
+"This semantic provider does not support this query. Remove unsupported "
+"filters or grouping and try again."
+msgstr ""
+
+msgid "This semantic view does not support server pagination."
 msgstr ""
 
 msgid ""
@@ -18771,6 +19144,9 @@ msgstr "Nivel alfa de prag pentru determinarea semnificației"
 
 msgid "Threshold for Other"
 msgstr "Prag pentru Altele"
+
+msgid "Threshold size unit"
+msgstr ""
 
 msgid "Threshold: "
 msgstr "Prag: "
@@ -19018,6 +19394,9 @@ msgstr[2] ""
 msgid "Token Request URI"
 msgstr "URI de solicitare a tokenului"
 
+msgid "Too many requests. Please wait and try again."
+msgstr ""
+
 # Machine-translated via backfill_po.py (claude-sonnet-4-6) [refs: ja]
 #, fuzzy, python-format
 msgid ""
@@ -19207,6 +19586,9 @@ msgstr "Marți"
 msgid "Tukey"
 msgstr "Tukey"
 
+msgid "Turn off server pagination"
+msgstr ""
+
 msgid "Turn off the logarithmic axis before stacking bars"
 msgstr ""
 
@@ -19313,6 +19695,9 @@ msgstr ""
 
 msgid "Unable to calculate such a date delta"
 msgstr "Nu se poate calcula un astfel de delta de dată"
+
+msgid "Unable to clear metadata cache"
+msgstr ""
 
 #, python-format
 msgid "Unable to connect to catalog named \"%(catalog_name)s\"."
@@ -19957,6 +20342,9 @@ msgstr "Format valoare"
 msgid "Value and Percentage"
 msgstr "Valoare și procentaj"
 
+msgid "Value axis labels"
+msgstr ""
+
 msgid "Value bounds"
 msgstr "Limite valoare"
 
@@ -20275,6 +20663,24 @@ msgstr "Depozit"
 msgid "Warning"
 msgstr "Avertisment"
 
+msgid "Warning checks are unavailable for SQL templates."
+msgstr ""
+
+msgid "Warning checks are unavailable for custom SQL transformations."
+msgstr ""
+
+msgid "Warning checks require a single read-only SELECT."
+msgstr ""
+
+msgid "Warning threshold"
+msgstr ""
+
+msgid "Warning threshold (bytes processed)"
+msgstr ""
+
+msgid "Warning threshold (planner cost)"
+msgstr ""
+
 msgid "Warning!"
 msgstr "Avertisment!"
 
@@ -20294,6 +20700,12 @@ msgid ""
 msgstr ""
 "Avertisment: Interogările ILIKE pot fi lente pe seturi de date mari, "
 "deoarece nu pot utiliza indexurile în mod eficient."
+
+msgid "Warnings are inactive because ESTIMATE_QUERY_COST is off."
+msgstr ""
+
+msgid "Warnings are inactive because SQLLAB_QUERY_COST_WARNINGS is off."
+msgstr ""
 
 msgid "Was unable to check your query"
 msgstr "Nu s-a putut verifica interogarea dvs."
@@ -21226,6 +21638,11 @@ msgstr ""
 "pentru %s pentru a solicita modificări sau acces de editare."
 
 msgid ""
+"You must be a chart editor in order to archive. Please reach out to a "
+"chart editor to request modifications or edit access."
+msgstr ""
+
+msgid ""
 "You must be a chart editor in order to delete. Please reach out to a "
 "chart editor to request modifications or edit access."
 msgstr ""
@@ -21236,6 +21653,11 @@ msgid ""
 msgstr ""
 
 msgid ""
+"You must be a dashboard editor in order to archive. Please reach out to a"
+" dashboard editor to request modifications or edit access."
+msgstr ""
+
+msgid ""
 "You must be a dashboard editor in order to delete. Please reach out to a "
 "dashboard editor to request modifications or edit access."
 msgstr ""
@@ -21243,6 +21665,11 @@ msgstr ""
 msgid ""
 "You must be a dashboard editor in order to edit. Please reach out to a "
 "dashboard editor to request modifications or edit access."
+msgstr ""
+
+msgid ""
+"You must be a dataset editor in order to archive. Please reach out to a "
+"dataset editor to request modifications or edit access."
 msgstr ""
 
 msgid ""
@@ -21368,6 +21795,15 @@ msgstr ""
 
 #, python-format
 msgid "Your export of \"%(title)s\" is ready."
+msgstr ""
+
+msgid "Your password could not be reset. Please try again later."
+msgstr ""
+
+msgid "Your password has been reset"
+msgstr ""
+
+msgid "Your password has been reset."
 msgstr ""
 
 msgid "Your query could not be saved"
@@ -21619,6 +22055,9 @@ msgstr "buton (cmd + z) până salvați modificările."
 
 msgid "by using"
 msgstr "folosind"
+
+msgid "bytes"
+msgstr ""
 
 #, python-format
 msgid "cannot be deleted because %s dataset is still attached to it."
@@ -22099,6 +22538,9 @@ msgstr "locale_key"
 msgid "log"
 msgstr "jurnal"
 
+msgid "lower bound"
+msgstr ""
+
 msgid ""
 "lower percentile must be greater than 0 and less than 100. Must be lower "
 "than upper percentile."
@@ -22281,6 +22723,9 @@ msgstr "pivoted_xlsx"
 
 msgid "pixels"
 msgstr "pixeli"
+
+msgid "planner cost units"
+msgstr ""
 
 msgid "previous calendar month"
 msgstr "luna calendaristică anterioară"
@@ -22501,6 +22946,9 @@ msgstr "nesetat"
 
 msgid "updated"
 msgstr "actualizat"
+
+msgid "upper bound"
+msgstr ""
 
 msgid ""
 "upper percentile must be greater than 0 and less than 100. Must be higher"
