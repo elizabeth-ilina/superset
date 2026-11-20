@@ -228,7 +228,7 @@ def test_get_default_schema_for_query(mocker: MockerFixture) -> None:
     """
 
     database = mocker.MagicMock()
-    query = mocker.MagicMock()
+    query = mocker.MagicMock(executed_sql=None)
 
     query.sql = "SELECT * FROM some_table"
     query.schema = "foo"
@@ -256,7 +256,7 @@ def test_get_default_schema_for_query_set_config(mocker: MockerFixture) -> None:
     must be rejected too.
     """
     database = mocker.MagicMock()
-    query = mocker.MagicMock()
+    query = mocker.MagicMock(executed_sql=None)
     query.schema = "foo"
     query.sql = (
         "SELECT set_config('search_path', 'tenant_b', false); SELECT * FROM orders"
@@ -934,3 +934,311 @@ def test_extended_aggregation_func_compiles_expected_sql(
         )
     )
     assert compiled == expected_sql
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        0,
+        0.125,
+        100.01,
+        None,
+        "100",
+        True,
+        False,
+        -1,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_warning_estimate_reads_only_root_plan_cost(
+    mocker: MockerFixture, value: object
+) -> None:
+    """EXPLAIN JSON returns unrounded numeric root cost without running the SQL."""
+    from superset.utils.core import QuerySource
+
+    database = mocker.MagicMock()
+    database.mutate_sql_based_on_config.side_effect = lambda sql, **kwargs: sql
+    connection = database.get_raw_connection.return_value.__enter__.return_value
+    cursor = connection.cursor.return_value
+    cursor.fetchone.return_value = (
+        [{"Plan": {"Total Cost": value, "Plans": [{"Total Cost": 99999}]}}],
+    )
+    estimate = spec.estimate_query_cost_for_warning(
+        database, "catalog", "schema", "SELECT * FROM test"
+    )
+    valid = (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and value in (0, 0.125, 100.01)
+    )
+    assert estimate.value == (value if valid else None)
+    if valid:
+        assert estimate.accuracy == "PRECISE"
+    cursor.execute.assert_called_once()
+    assert " ".join(cursor.execute.call_args.args[0].split()) == (
+        "EXPLAIN (FORMAT JSON) SELECT * FROM test"
+    )
+    cursor.close.assert_called_once()
+    database.get_raw_connection.assert_called_once_with(
+        catalog="catalog", schema="schema", source=QuerySource.SQL_LAB
+    )
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        None,
+        (),
+        (None,),
+        ([],),
+        ([{}],),
+        ([{"Plan": None}],),
+        ("masked",),
+        ([{"Plan": {}}],),
+    ],
+)
+def test_warning_estimate_missing_plan_is_unavailable(
+    mocker: MockerFixture, row: object
+) -> None:
+    """Malformed or absent plans never become a zero-cost estimate."""
+    database = mocker.MagicMock()
+    connection = database.get_raw_connection.return_value.__enter__.return_value
+    cursor = connection.cursor.return_value
+    cursor.fetchone.return_value = row
+    assert (
+        spec.estimate_query_cost_for_warning(database, None, "", "SELECT 1").value
+        is None
+    )
+
+
+def test_warning_estimate_does_not_change_manual_postgres_response() -> None:
+    """Manual estimates keep their existing display keys and formatter input."""
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (
+        "Seq Scan on test (cost=0.00..45.67 rows=1 width=8)",
+    )
+    costs = spec.estimate_statement_cost(MagicMock(), "SELECT * FROM test", cursor)
+    assert costs == {"Start-up cost": 0.0, "Total cost": 45.67}
+    assert spec.query_cost_formatter([costs]) == [
+        {"Start-up cost": "0.0", "Total cost": "45.67"}
+    ]
+    cursor.execute.assert_called_once_with("EXPLAIN SELECT * FROM test")
+
+
+@pytest.mark.parametrize("sql", ["SELECT 1; SELECT 2", "CREATE TABLE t AS SELECT 1"])
+def test_warning_estimate_unsupported_script_does_not_run_explain(
+    mocker: MockerFixture, sql: str
+) -> None:
+    """Warning estimates do not plan unsupported scripts or CTAS statements."""
+    database = mocker.MagicMock()
+    assert spec.estimate_query_cost_for_warning(database, None, "", sql).value is None
+    database.get_raw_connection.assert_not_called()
+
+
+def test_warning_estimate_unverified_postgres_subclass_is_unsupported() -> None:
+    """Postgres-like connectors must explicitly verify their own planner semantics."""
+
+    class UnverifiedPostgres(spec):
+        """A connector whose EXPLAIN semantics are unverified."""
+
+    database = MagicMock()
+    assert UnverifiedPostgres.get_query_cost_warning_metric() is None
+    assert UnverifiedPostgres.get_query_warning_check() is None
+    assert (
+        UnverifiedPostgres.estimate_query_cost_for_warning(
+            database, None, "", "SELECT 1"
+        ).value
+        is None
+    )
+    database.get_raw_connection.assert_not_called()
+
+
+def _search_path_database(
+    mocker: MockerFixture,
+    search_path: Any,
+    found: list[tuple[str, str]] | None = None,
+) -> MagicMock:
+    """
+    A database whose connection reports a search path and the schema each quoted
+    table name resolves to. A path given as the schemas alone is set as the
+    ``search_path`` too, for a user without a schema.
+    """
+    database = mocker.MagicMock()
+    cursor = database.get_raw_connection.return_value.__enter__.return_value.cursor
+    if isinstance(search_path, Exception):
+        cursor.return_value.execute.side_effect = search_path
+    else:
+        if (
+            isinstance(search_path, tuple)
+            and len(search_path) == 1
+            and isinstance(search_path[0], list)
+        ):
+            schemas = [s for s in search_path[0] if s != "pg_catalog"]
+            search_path = (search_path[0], ", ".join(schemas), "nobody")
+        cursor.return_value.fetchone.return_value = search_path
+        cursor.return_value.fetchall.return_value = found or []
+    return database
+
+
+SEARCH_PATH_QUERY = (
+    "SELECT pg_catalog.current_schemas(true)::text[], "
+    "pg_catalog.current_setting('search_path'), current_user::text"
+)
+
+
+def test_get_search_path(mocker: MockerFixture) -> None:
+    """
+    DB Eng Specs (postgres): ``get_search_path`` lists every schema searched for an
+    unqualified table, the implicit ``pg_catalog`` included, and resolves each
+    table to the schema holding it, both spellings of a name that may be quoted.
+    """
+    database = _search_path_database(
+        mocker,
+        (["pg_catalog", "analyst", "public"],),
+        [
+            ('"pg_class"', "pg_catalog"),
+            ('"Sales"', "public"),
+            ('"sales"', "analyst"),
+            ('"temp"', "pg_temp_3"),
+        ],
+    )
+
+    assert spec.get_search_path(
+        database, "analytics", ["Sales", "pg_class", "missing", "temp"]
+    ) == (
+        ["pg_catalog", "analyst", "public"],
+        {
+            "Sales": ["analyst", "public"],
+            "pg_class": ["pg_catalog"],
+            "temp": ["pg_temp_3"],
+        },
+    )
+    database.get_raw_connection.assert_called_once_with(catalog="analytics")
+    cursor = database.get_raw_connection.return_value.__enter__.return_value.cursor
+    (paths,), (lookup, params) = (
+        call.args for call in cursor.return_value.execute.call_args_list
+    )
+    assert paths == SEARCH_PATH_QUERY
+    assert "pg_catalog.to_regclass(spelling)" in lookup
+    assert params == (['"Sales"', '"sales"', '"pg_class"', '"missing"', '"temp"'],)
+
+
+def test_get_search_path_without_tables(mocker: MockerFixture) -> None:
+    """
+    DB Eng Specs (postgres): only the search path is read when no table is asked
+    about, and a name is quoted so it's looked up exactly as written.
+    """
+    database = _search_path_database(mocker, (["public"],))
+    cursor = database.get_raw_connection.return_value.__enter__.return_value.cursor
+
+    assert spec.get_search_path(database, None) == (["public"], {})
+    cursor.return_value.execute.assert_called_once_with(SEARCH_PATH_QUERY)
+
+    spec.get_search_path(database, None, ['a"b'])
+    assert cursor.return_value.execute.call_args.args[1] == (['"a""b"'],)
+
+
+@pytest.mark.parametrize(
+    "table, spellings",
+    [
+        # either spelling of an ASCII name, since it may have been quoted
+        ("Sales", ['"Sales"', '"sales"']),
+        ("sales", ['"sales"']),
+        # Postgres folds ASCII letters only: ``VENTÉ`` is read as ``ventÉ``, never
+        # the ``venté`` ``str.lower`` makes of it. The name is also passed unquoted
+        # for a database whose encoding folds other letters as well.
+        ("VENTÉ", ['"VENTÉ"', '"ventÉ"', "VENTÉ"]),
+        ("ventÉ", ['"ventÉ"', "ventÉ"]),
+        # a name ``to_regclass`` would read as several isn't passed unquoted
+        ("A.É", ['"A.É"', '"a.É"']),
+    ],
+)
+def test_get_search_path_folds_ascii_letters_only(
+    mocker: MockerFixture, table: str, spellings: list[str]
+) -> None:
+    """
+    DB Eng Specs (postgres): ``get_search_path`` looks a table up under the names
+    Postgres reads it as, folding ASCII letters only, so the schema it returns is
+    the one holding the table the query reads (a ``ventÉ`` in ``public`` isn't
+    shadowed by a ``venté`` in the user's schema).
+    """
+    database = _search_path_database(
+        mocker, (["pg_catalog", "analyst", "public"],), [('"ventÉ"', "public")]
+    )
+    cursor = database.get_raw_connection.return_value.__enter__.return_value.cursor
+
+    found = spec.get_search_path(database, None, [table])
+
+    assert cursor.return_value.execute.call_args.args[1] == (spellings,)
+    assert found[1] == ({table: ["public"]} if '"ventÉ"' in spellings else {})
+
+
+@pytest.mark.parametrize(
+    "setting, schemas",
+    [
+        ('"$user", public', ["pg_catalog", "public", "analyst"]),
+        ("analyst, public", ["pg_catalog", "public", "analyst"]),
+        (
+            'Staging, "My, ""S""", pg_temp, public',
+            ["pg_catalog", "public", "staging", 'My, "S"'],
+        ),
+        ("", ["pg_catalog", "public"]),
+    ],
+)
+def test_get_search_path_lists_schemas_not_created_yet(
+    mocker: MockerFixture, setting: str, schemas: list[str]
+) -> None:
+    """
+    DB Eng Specs (postgres): ``current_schemas`` leaves out a schema the path names
+    that doesn't exist, which a script can create before reading a table from it,
+    so ``get_search_path`` lists it after the schemas searched: ``$user`` as the
+    current user's schema, an unquoted name folded and a quoted one as written.
+    The session's own ``pg_temp`` isn't one.
+    """
+    database = _search_path_database(
+        mocker, (["pg_catalog", "public"], setting, "analyst")
+    )
+
+    assert spec.get_search_path(database, None) == (schemas, {})
+
+
+@pytest.mark.parametrize("search_path", [None, ("{analyst,public}",)])
+def test_get_search_path_unreadable(mocker: MockerFixture, search_path: Any) -> None:
+    """
+    DB Eng Specs (postgres): a search path the connection doesn't report as a list
+    raises, rather than reading as an empty one.
+    """
+    database = _search_path_database(mocker, search_path)
+
+    with pytest.raises(ValueError, match="Unexpected search path"):
+        spec.get_search_path(database, None, ["sales"])
+
+
+def test_get_search_path_failure_raises(mocker: MockerFixture) -> None:
+    """
+    DB Eng Specs (postgres): a connection that can't be asked raises, rather than
+    falling back to its default schema, which needn't be where a table is read.
+    """
+    database = _search_path_database(mocker, Exception("permission denied"))
+
+    with pytest.raises(Exception, match="permission denied"):
+        spec.get_search_path(database, None, ["sales"])
+    database.get_inspector.assert_not_called()
+
+
+def test_schema_guard_checks_rendered_sql_without_rerender(
+    mocker: MockerFixture,
+) -> None:
+    """Already rendered SQL retains search-path enforcement without running macros."""
+    render = mocker.patch("superset.db_engine_specs.postgres.process_jinja_sql")
+    query = mocker.MagicMock(
+        sql="{{ dynamic_sql }}", executed_sql="SELECT 42", schema="public"
+    )
+    database = mocker.MagicMock()
+    assert spec.get_default_schema_for_query(database, query) == "public"
+    query.executed_sql = "SELECT set_config('search_path', 'other', false)"
+    with pytest.raises(SupersetSecurityException):
+        spec.get_default_schema_for_query(database, query)
+    render.assert_not_called()

@@ -20,6 +20,8 @@ import { ChangeEvent, EventHandler, FormEvent } from 'react';
  * specific language governing permissions and limitations
  * under the License.
  */
+import type { queryCostWarningMetrics } from './queryCostWarning';
+
 type DatabaseUser = {
   first_name: string;
   last_name: string;
@@ -60,8 +62,33 @@ export type DatabaseParameters = {
   warehouse?: string;
   role?: string;
   account?: string;
+  aws_access_key_id?: string;
+  aws_secret_access_key?: string;
+  region_name?: string;
+  s3_staging_dir?: string;
+  schema_name?: string;
+  work_group?: string;
   ssh?: boolean;
   project_id?: string;
+  oauth2_client_info?: Record<string, string>;
+  embedded_credentials?: Record<string, string>;
+};
+
+export type QueryCostWarningMetric = keyof typeof queryCostWarningMetrics;
+
+export type QueryCostWarning = {
+  [key: string]: unknown;
+  enabled: boolean;
+  all_users?: boolean;
+  metric?: QueryCostWarningMetric;
+  threshold?: number;
+};
+
+// When a stored JWT expires, read from its exp claim; `expired` is decided by
+// the server.
+export type EncryptedExtraExpiration = {
+  expires_at: string;
+  expired: boolean;
 };
 
 export type DatabaseObject = {
@@ -89,6 +116,8 @@ export type DatabaseObject = {
 
   // SQL Lab
   allows_cost_estimate?: boolean;
+  query_cost_warning?: QueryCostWarning | null;
+  query_warning_state?: 'unsupported' | 'disabled' | 'ready' | 'invalid';
   allow_ctas?: boolean;
   allow_cvas?: boolean;
   allow_dml?: boolean;
@@ -113,10 +142,15 @@ export type DatabaseObject = {
 
   // DB Engine Spec information
   engine_information?: {
+    query_cost_warning_metric?: QueryCostWarningMetric | null;
+    query_warning_supported?: boolean;
     supports_file_upload?: boolean;
     disable_ssh_tunneling?: boolean;
     supports_dynamic_catalog?: boolean;
     supports_oauth2?: boolean;
+    oauth2_enabled?: boolean;
+    encrypted_extra_sensitive_fields?: Record<string, string>;
+    encrypted_extra_expirations?: Record<string, EncryptedExtraExpiration>;
   };
 
   // SSH Tunnel information
@@ -220,9 +254,12 @@ export type DatabaseForm = {
   preferred: boolean;
   sqlalchemy_uri_placeholder: string;
   engine_information: {
+    query_cost_warning_metric?: QueryCostWarningMetric | null;
+    query_warning_supported?: boolean;
     supports_file_upload: boolean;
     disable_ssh_tunneling: boolean;
     supports_dynamic_catalog: boolean;
+    encrypted_extra_sensitive_fields?: Record<string, string>;
   };
 };
 
@@ -243,6 +280,7 @@ export interface ExtraJson {
   allows_virtual_table_explore?: boolean; // in SQL Lab
   cancel_query_on_windows_unload?: boolean; // in Performance
   cost_estimate_enabled?: boolean; // in SQL Lab
+  query_cost_warning?: QueryCostWarning;
   disable_data_preview?: boolean; // in SQL Lab
   disable_drill_to_detail?: boolean;
   allow_multi_catalog?: boolean;
@@ -264,6 +302,22 @@ export interface ExtraJson {
   };
   version?: string;
 }
+
+// Ending of a stored secret, from the encrypted_extra_hints endpoint.
+export type EncryptedExtraHint = {
+  path: string;
+  label: string;
+  suffix: string | null;
+  // From a JWT's exp claim, ISO 8601 UTC; null for other values.
+  expires_at?: string | null;
+  expired?: boolean | null;
+};
+
+// A stored secret's field, known from the engine's declared sensitive paths.
+export type EncryptedExtraSecretField = {
+  path: string;
+  label: string;
+};
 
 export type CustomTextType = {
   value?: string | boolean | number | object;

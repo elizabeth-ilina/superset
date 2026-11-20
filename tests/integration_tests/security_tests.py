@@ -1758,6 +1758,14 @@ class TestRolePermission(SupersetTestCase):
             # reachable with no session at all, since it is clicked from a
             # plain email link.
             ["DashboardRestApi", "download_xlsx"],
+            # Self-service AUTH_DB password recovery: used by people who cannot
+            # sign in, so it has to be anonymous. Answers 404 unless recovery
+            # is enabled; the API is CSRF-protected and rate limited, and the
+            # reset only proceeds with a single-use emailed token.
+            ["PasswordRecoveryRestApi", "request_recovery"],
+            ["PasswordRecoveryRestApi", "reset"],
+            ["SupersetAuthView", "forgot_password"],
+            ["SupersetAuthView", "reset_password"],
             # Language pack endpoint serves JS bundle translations, no auth
             # needed; embedded dashboards fetch this without a guest-token
             # header, so it must be reachable unauthenticated.
@@ -1842,6 +1850,7 @@ class TestSecurityManager(SupersetTestCase):
     def test_raise_for_access_query(self, mock_can_access, mock_is_editor):
         query = Mock(
             database=get_example_database(),
+            executed_sql=None,
             schema="bar",
             sql="SELECT * FROM foo",
             catalog=None,
@@ -1888,6 +1897,7 @@ class TestSecurityManager(SupersetTestCase):
         """
         query = Mock(
             database=get_example_database(),
+            executed_sql=None,
             schema="bar",
             sql="SELECT * FROM foo",
             catalog=None,
@@ -1909,11 +1919,12 @@ class TestSecurityManager(SupersetTestCase):
     ):
         """
         Regression test: with force_dataset_match=True, schema_access alone
-        is not sufficient. The user must have datasource_access (or edit) a
+        is not sufficient. The user must have datasource_access on a
         registered Superset dataset for the referenced table.
         """
         query = Mock(
             database=get_example_database(),
+            executed_sql=None,
             schema="bar",
             sql="SELECT * FROM table_with_no_dataset",
             catalog=None,
@@ -1927,6 +1938,121 @@ class TestSecurityManager(SupersetTestCase):
 
         with self.assertRaises(SupersetSecurityException):  # noqa: PT027
             security_manager.raise_for_access(query=query, force_dataset_match=True)
+
+    @patch("superset.connectors.sqla.models.SqlaTable.query_datasources_by_name")
+    @patch("superset.security.SupersetSecurityManager.is_editor")
+    @patch("superset.security.SupersetSecurityManager.can_access")
+    def test_raise_for_access_force_dataset_match_denies_editor_only(
+        self, mock_can_access, mock_is_editor, mock_query_datasources
+    ):
+        """
+        Regression test: with force_dataset_match=True, being an
+        editor of a registered dataset for the referenced table is NOT
+        sufficient. Raw row access on the strict path (SQL Lab, MetaDB, MCP
+        execute_sql) must follow live data grants, not editorship — which any
+        dataset-creating principal can grant themselves and which would
+        otherwise survive revocation of every real data-access grant.
+        """
+        query = Mock(
+            database=get_example_database(),
+            executed_sql=None,
+            schema="bar",
+            sql="SELECT * FROM foo",
+            catalog=None,
+        )
+        # A dataset exists for the table and the user is its editor, but holds
+        # no datasource_access (nor any catalog/schema/database grant).
+        mock_query_datasources.return_value = [
+            Mock(perm="[examples].[bar].[foo](id:1)")
+        ]
+        mock_can_access.return_value = False
+        mock_is_editor.return_value = True
+
+        with self.assertRaises(SupersetSecurityException):  # noqa: PT027
+            security_manager.raise_for_access(query=query, force_dataset_match=True)
+
+    @patch("superset.connectors.sqla.models.SqlaTable.query_datasources_by_name")
+    @patch("superset.security.SupersetSecurityManager.is_editor")
+    @patch("superset.security.SupersetSecurityManager.can_access")
+    def test_raise_for_access_non_strict_allows_editor(
+        self, mock_can_access, mock_is_editor, mock_query_datasources
+    ):
+        """
+        The dataset-owner "explore your own dataset" grant (#20382) is
+        preserved on the non-strict path: without force_dataset_match,
+        editorship of a registered dataset for the referenced table still
+        authorizes access even when the user holds no datasource_access.
+        """
+        query = Mock(
+            database=get_example_database(),
+            executed_sql=None,
+            schema="bar",
+            sql="SELECT * FROM foo",
+            catalog=None,
+        )
+        mock_query_datasources.return_value = [
+            Mock(perm="[examples].[bar].[foo](id:1)")
+        ]
+        mock_can_access.return_value = False
+        mock_is_editor.return_value = True
+
+        security_manager.raise_for_access(query=query)
+
+    @patch("superset.connectors.sqla.models.SqlaTable.query_datasources_by_name")
+    @patch("superset.security.SupersetSecurityManager.is_editor")
+    @patch("superset.security.SupersetSecurityManager.can_access")
+    def test_raise_for_access_allow_editorship_false_denies_editor(
+        self, mock_can_access, mock_is_editor, mock_query_datasources
+    ):
+        """
+        With allow_editorship=False (dataset create/update SQL and table
+        validation), editorship of a registered dataset for the referenced
+        table is NOT sufficient. This stops a no-table decoy dataset named
+        after the table from letting its editor define a second dataset that
+        reads it, without ever holding data access to the table.
+        """
+        query = Mock(
+            database=get_example_database(),
+            executed_sql=None,
+            schema="bar",
+            sql="SELECT * FROM foo",
+            catalog=None,
+        )
+        mock_query_datasources.return_value = [
+            Mock(perm="[examples].[bar].[foo](id:1)")
+        ]
+        mock_can_access.return_value = False
+        mock_is_editor.return_value = True
+
+        with self.assertRaises(SupersetSecurityException):  # noqa: PT027
+            security_manager.raise_for_access(query=query, allow_editorship=False)
+
+    @patch("superset.connectors.sqla.models.SqlaTable.query_datasources_by_name")
+    @patch("superset.security.SupersetSecurityManager.is_editor")
+    @patch("superset.security.SupersetSecurityManager.can_access")
+    def test_raise_for_access_allow_editorship_false_keeps_schema_access(
+        self, mock_can_access, mock_is_editor, mock_query_datasources
+    ):
+        """
+        allow_editorship=False still keeps the catalog/schema fallthroughs:
+        a user with schema_access can define a dataset over the table even
+        though they are not an editor and hold no datasource_access. This is
+        what distinguishes it from force_dataset_match=True (which drops the
+        schema fallthrough).
+        """
+        query = Mock(
+            database=get_example_database(),
+            executed_sql=None,
+            schema="bar",
+            sql="SELECT * FROM foo",
+            catalog=None,
+        )
+        # No registered dataset, not an editor; only schema_access holds.
+        mock_query_datasources.return_value = []
+        mock_can_access.side_effect = lambda perm, _vm: perm == "schema_access"
+        mock_is_editor.return_value = False
+
+        security_manager.raise_for_access(query=query, allow_editorship=False)
 
     @patch("superset.connectors.sqla.models.SqlaTable.query_datasources_by_name")
     @patch("superset.security.SupersetSecurityManager.is_editor")
@@ -1983,6 +2109,7 @@ class TestSecurityManager(SupersetTestCase):
         """
         query = Mock(
             database=get_example_database(),
+            executed_sql=None,
             schema="public",
             # CALL on Postgres parses as exp.Command with no parseable
             # literal, yielding zero extracted tables.
@@ -2013,8 +2140,6 @@ class TestSecurityManager(SupersetTestCase):
         ``executed_sql`` (the rendered SQL that actually ran) when it is set
         to keep the table set aligned with the execute-time check.
         """
-        from superset.sql.parse import JinjaSQLResult, SQLScript
-
         query = Mock(
             database=get_example_database(),
             schema="bar",
@@ -2022,18 +2147,19 @@ class TestSecurityManager(SupersetTestCase):
             executed_sql="SELECT * FROM bar.foo",
             catalog=None,
         )
-        mock_process_jinja.return_value = JinjaSQLResult(
-            script=SQLScript("SELECT * FROM bar.foo", "postgresql"),
-            tables=set(),
+        mock_query_datasources.return_value = [Mock(perm="allowed")]
+        mock_can_access.side_effect = (
+            lambda permission, _view: permission == "datasource_access"
         )
-        mock_query_datasources.return_value = []
-        mock_can_access.return_value = False
         mock_is_editor.return_value = False
 
         security_manager.raise_for_access(query=query, force_dataset_match=True)
-
-        sql_passed = mock_process_jinja.call_args.args[0]
-        assert sql_passed == "SELECT * FROM bar.foo"
+        assert mock_query_datasources.call_args.args[1] == "foo"
+        assert mock_query_datasources.call_args.kwargs["schema"] == "bar"
+        mock_query_datasources.return_value = []
+        with self.assertRaises(SupersetSecurityException):  # noqa: PT027
+            security_manager.raise_for_access(query=query, force_dataset_match=True)
+        mock_process_jinja.assert_not_called()
 
     @patch("superset.connectors.sqla.models.SqlaTable.query_datasources_by_name")
     @patch("superset.security.SupersetSecurityManager.is_editor")
@@ -2079,6 +2205,7 @@ class TestSecurityManager(SupersetTestCase):
         """
         query = Mock(
             database=get_example_database(),
+            executed_sql=None,
             schema="bar",
             sql="SELECT * FROM table_with_no_dataset",
             catalog=None,

@@ -21,8 +21,94 @@ import pytest
 from pytest_mock import MockerFixture
 
 from superset.commands.database.create import CreateDatabaseCommand
+from superset.commands.database.exceptions import (
+    DatabaseInvalidError,
+    MissingOAuth2TokenError,
+)
 from superset.exceptions import OAuth2RedirectError
 from superset.extensions import security_manager
+from superset.utils import json
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize(
+    "engine,metric", [("bigquery", "bytes_processed"), ("postgresql", "total_cost")]
+)
+def test_create_preserves_warning_rule_and_unrelated_extras(
+    mocker: MockerFixture, enabled: bool, engine: str, metric: str
+) -> None:
+    """Command saves preserve explicit rules and unrelated connection settings."""
+    mocker.patch(
+        "superset.commands.database.create.DatabaseDAO.validate_uniqueness",
+        return_value=True,
+    )
+    extra = {
+        "query_cost_warning": {
+            "enabled": enabled,
+            "all_users": True,
+            "metric": metric,
+            "threshold": 100,
+        },
+        "engine_params": {"pool_pre_ping": True},
+    }
+    command = CreateDatabaseCommand(
+        {
+            "database_name": "test",
+            "sqlalchemy_uri": f"{engine}://",
+            "extra": json.dumps(extra),
+        }
+    )
+    command.validate()
+    assert json.loads(command._properties["extra"]) == extra
+
+
+@pytest.mark.parametrize("extra", [None, {}, {"metadata_params": {}}])
+def test_create_does_not_add_warning_settings(
+    mocker: MockerFixture, extra: dict[str, object] | None
+) -> None:
+    """Creating a connection without a rule preserves absent and explicit extras."""
+    mocker.patch(
+        "superset.commands.database.create.DatabaseDAO.validate_uniqueness",
+        return_value=True,
+    )
+    properties = {"database_name": "test", "sqlalchemy_uri": "postgresql://"}
+    if extra is not None:
+        properties["extra"] = json.dumps(extra)
+    command = CreateDatabaseCommand(properties)
+
+    command.validate()
+
+    if extra is None:
+        assert "extra" not in command._properties
+    else:
+        assert json.loads(command._properties["extra"]) == extra
+
+
+def test_create_rejects_warning_metric_for_another_engine(
+    mocker: MockerFixture,
+) -> None:
+    """Direct command callers also validate enabled metrics against the URI."""
+    mocker.patch(
+        "superset.commands.database.create.DatabaseDAO.validate_uniqueness",
+        return_value=True,
+    )
+    command = CreateDatabaseCommand(
+        {
+            "database_name": "test",
+            "sqlalchemy_uri": "postgresql://",
+            "extra": json.dumps(
+                {
+                    "query_cost_warning": {
+                        "enabled": True,
+                        "metric": "bytes_processed",
+                        "threshold": 100,
+                    }
+                }
+            ),
+        }
+    )
+    with pytest.raises(DatabaseInvalidError):
+        command.validate()
 
 
 @pytest.fixture
@@ -155,3 +241,36 @@ def test_create_with_oauth2(
     ).run()
 
     add_permission_view_menu.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OAuth2RedirectError("url", "tab_id", "redirect_uri"),
+        MissingOAuth2TokenError(),
+    ],
+)
+def test_create_succeeds_when_permission_sync_needs_oauth2(
+    mocker: MockerFixture,
+    database_with_catalog: MagicMock,
+    error: Exception,
+) -> None:
+    """
+    A valid create is not reported as failed when only the permission sync needs
+    the creating admin's OAuth2 token (sc-126623).
+
+    The connection test passes on the connection's own settings; listing catalogs
+    runs through impersonation as the admin, who has no token yet. Reporting a 422
+    left the row committed behind it anyway.
+    """
+    database_with_catalog.get_all_catalog_names.side_effect = error
+
+    database = CreateDatabaseCommand(
+        {
+            "database_name": "test_database",
+            "sqlalchemy_uri": "sqlite://",
+            "impersonate_user": True,
+        }
+    ).run()
+
+    assert database is database_with_catalog

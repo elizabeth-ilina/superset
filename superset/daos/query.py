@@ -19,16 +19,16 @@ from datetime import datetime, timezone
 from typing import Any, Union
 
 from superset import sql_lab
-from superset.common.db_query_status import QueryStatus
+from superset.common.db_query_status import HIDDEN_QUERY_STATUSES, QueryStatus
 from superset.daos.base import BaseDAO
-from superset.exceptions import QueryNotFoundException, SupersetCancelQueryException
+from superset.exceptions import QueryNotFoundException
 from superset.extensions import db
 from superset.models.sql_lab import Query, SavedQuery
 from superset.queries.filters import QueryFilter
 from superset.queries.saved_queries.filters import SavedQueryFilter
+from superset.sql.execution.utils import finish_query_stop, set_query_stopped
 from superset.utils.core import get_user_id
 from superset.utils.dates import now_as_float
-from superset.utils.decorators import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,11 @@ class QueryDAO(BaseDAO[Query]):
 
     @staticmethod
     def save_metadata(query: Query, payload: dict[str, Any]) -> None:
+        # Status-only responses must not overwrite stored result columns.
+        if "columns" not in payload:
+            return
         # pull relevant data from payload and store in extra_json
-        columns = payload.get("columns", {})
+        columns = payload["columns"]
         for col in columns:
             if "name" in col:
                 col["column_name"] = col.get("name")
@@ -55,13 +58,17 @@ class QueryDAO(BaseDAO[Query]):
 
         return (
             db.session.query(Query)
-            .filter(Query.user_id == get_user_id(), Query.changed_on >= last_updated_dt)
+            .filter(
+                Query.user_id == get_user_id(),
+                Query.changed_on >= last_updated_dt,
+                ~Query.status.in_(HIDDEN_QUERY_STATUSES),
+            )
             .all()
         )
 
     @staticmethod
-    @transaction()
-    def stop_query(client_id: str) -> None:
+    def stop_query(client_id: str) -> Query:
+        """Stop a query and return its recorded outcome, including a lost race."""
         query = (
             db.session.query(Query)
             .filter(Query.client_id == client_id, Query.user_id == get_user_id())
@@ -78,19 +85,45 @@ class QueryDAO(BaseDAO[Query]):
             logger.warning(
                 "Query with client_id could not be stopped: query already complete",
             )
-            return
+            return query
 
-        if not sql_lab.cancel_query(query):
-            raise SupersetCancelQueryException("Could not cancel query")
-
-        # cancel_query() may have staged an early-cancel flag on query.extra
-        # without committing it (see its docstring/comments); the
-        # @transaction decorator commits it together with status=STOPPED
-        # below in one transaction, closing the window where another
-        # request could observe the flag set but the status still RUNNING.
-        query.status = QueryStatus.STOPPED
-        query.end_time = now_as_float()
+        with db.session.no_autoflush:
+            if not set_query_stopped(query, now_as_float()):
+                db.session.commit()  # pylint: disable=consider-using-transaction
+                return query
+            finish_query_stop(query, lambda: sql_lab.cancel_query(query))
+        return query
 
 
 class SavedQueryDAO(BaseDAO[SavedQuery]):
     base_filter = SavedQueryFilter
+
+    @staticmethod
+    def validate_label_uniqueness(
+        label: str,
+        owner_id: int | None,
+        db_id: int | None,
+        saved_query_id: int | None = None,
+    ) -> bool:
+        """
+        Validate that no other saved query of the same owner and database uses
+        this label. The comparison is exact on the label as stored.
+
+        The check is best-effort: there is no database constraint behind it, so
+        truly concurrent requests can still race and create a duplicate.
+
+        :param label: The (already stripped) saved query label
+        :param owner_id: The id of the user owning the saved query
+        :param db_id: The id of the database the saved query targets
+        :param saved_query_id: The saved query's own id, excluded from the
+            comparison (only for validating on updates)
+        :return: True when the label is not taken
+        """
+        query = db.session.query(SavedQuery).filter(
+            SavedQuery.label == label,
+            SavedQuery.created_by_fk == owner_id,
+            SavedQuery.db_id.is_(None) if db_id is None else SavedQuery.db_id == db_id,
+        )
+        if saved_query_id is not None:
+            query = query.filter(SavedQuery.id != saved_query_id)
+        return not db.session.query(query.exists()).scalar()

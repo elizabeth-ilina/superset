@@ -19,10 +19,142 @@ import copy
 import json  # noqa: TID251
 from typing import Any
 
+import pytest
+from marshmallow import ValidationError
 from pytest_mock import MockerFixture
 from sqlalchemy.orm.session import Session
 
 from tests.unit_tests.fixtures.assets_configs import databases_config
+
+
+@pytest.mark.parametrize("broken", [False, True])
+@pytest.mark.parametrize("engine", ["postgresql", "bigquery"])
+@pytest.mark.parametrize(
+    "extra", [None, {}, {"query_cost_warning": {"enabled": False}}]
+)
+def test_import_replaces_extra_without_restoring_saved_warning_fields(
+    mocker: MockerFixture,
+    session: Session,
+    broken: bool,
+    engine: str,
+    extra: dict[str, object] | None,
+) -> None:
+    """Imports replace extra, including when a saved rule is broken or incompatible."""
+    from superset import db, security_manager
+    from superset.commands.database.importers.v1.utils import import_database
+    from superset.databases.schemas import ImportV1DatabaseSchema
+    from superset.models.core import Database
+
+    mocker.patch.object(security_manager, "can_access", return_value=True)
+    mocker.patch("superset.commands.database.importers.v1.utils.add_permissions")
+    Database.metadata.create_all(db.session.get_bind())
+    rule = {
+        "enabled": True,
+        "metric": "total_cost",
+        "threshold": "bad" if broken else 12.5,
+    }
+    stored = {
+        "query_cost_warning": rule,
+        "engine_params": {"pool_pre_ping": True},
+    }
+    database = Database(
+        database_name="warning-test",
+        sqlalchemy_uri="postgresql://",
+        extra=json.dumps(stored),
+    )
+    db.session.add(database)
+    db.session.flush()
+    payload: dict[str, object] = {
+        "database_name": database.database_name,
+        "sqlalchemy_uri": f"{engine}://",
+        "password": "fresh-test-password",
+        "uuid": str(database.uuid),
+        "version": "1.0.0",
+    }
+    if extra is not None:
+        payload["extra"] = extra
+    config = ImportV1DatabaseSchema().load(payload)
+    imported = import_database(config, overwrite=True)
+    assert imported.id == database.id
+    assert json.loads(imported.extra) == (extra if extra is not None else {})
+
+
+def test_import_warning_replacement_keeps_secret_rebind_validation(
+    mocker: MockerFixture, session: Session
+) -> None:
+    """Dropping stored engine parameters must still require fresh credentials."""
+    from superset import db, security_manager
+    from superset.commands.database.importers.v1.utils import import_database
+    from superset.commands.exceptions import ImportFailedError
+    from superset.models.core import Database
+
+    mocker.patch.object(security_manager, "can_access", return_value=True)
+    add_permissions = mocker.patch(
+        "superset.commands.database.importers.v1.utils.add_permissions"
+    )
+    Database.metadata.create_all(db.session.get_bind())
+    stored = {
+        "engine_params": {"connect_args": {"host": "override.example.com"}},
+        "query_cost_warning": {
+            "enabled": True,
+            "metric": "total_cost",
+            "threshold": 10,
+        },
+    }
+    database = Database(
+        database_name="warning-test",
+        sqlalchemy_uri="postgresql://user:stored-test-password@host/test",
+        extra=json.dumps(stored),
+    )
+    database.set_sqlalchemy_uri(database.sqlalchemy_uri)
+    db.session.add(database)
+    db.session.flush()
+
+    with pytest.raises(ImportFailedError, match="without providing new credentials"):
+        import_database(
+            {
+                "database_name": database.database_name,
+                "sqlalchemy_uri": database.sqlalchemy_uri,
+                "uuid": database.uuid,
+                "extra": {"query_cost_warning": {"enabled": False}},
+            },
+            overwrite=True,
+        )
+
+    assert json.loads(database.extra) == stored
+    add_permissions.assert_not_called()
+
+
+def test_import_rejects_warning_incompatible_with_resulting_engine(
+    mocker: MockerFixture, session: Session
+) -> None:
+    """An overwrite validates the supplied rule against the incoming connection URI."""
+    from superset import db, security_manager
+    from superset.commands.database.importers.v1.utils import import_database
+    from superset.models.core import Database
+
+    mocker.patch.object(security_manager, "can_access", return_value=True)
+    Database.metadata.create_all(db.session.get_bind())
+    database = Database(database_name="warning-test", sqlalchemy_uri="bigquery://")
+    db.session.add(database)
+    db.session.flush()
+    with pytest.raises(ValidationError):
+        import_database(
+            {
+                "database_name": database.database_name,
+                "sqlalchemy_uri": "postgresql://",
+                "password": "fresh-test-password",
+                "uuid": database.uuid,
+                "extra": {
+                    "query_cost_warning": {
+                        "enabled": True,
+                        "metric": "bytes_processed",
+                        "threshold": 100,
+                    }
+                },
+            },
+            overwrite=True,
+        )
 
 
 def test_import_database_with_encrypted_extra(
@@ -157,7 +289,9 @@ def test_transient_schema_listing_failure_is_recovered_by_retry(
     from superset.models.core import Database
 
     mocker.patch.object(security_manager, "can_access", return_value=True)
-    add_permission_view_menu = mocker.spy(security_manager, "add_permission_view_menu")
+    from superset.commands.database import utils
+
+    add_permission_view_menu = mocker.spy(utils, "add_pvm")
 
     engine = db.session.get_bind()
     Database.metadata.create_all(engine)  # pylint: disable=no-member
@@ -184,4 +318,6 @@ def test_transient_schema_listing_failure_is_recovered_by_retry(
     )
     ImportDatabasesCommand._import(copy.deepcopy(configs), overwrite=True)
 
-    add_permission_view_menu.assert_any_call("schema_access", "[examples].[new_schema]")
+    add_permission_view_menu.assert_any_call(
+        db.session, security_manager, "schema_access", "[examples].[new_schema]"
+    )

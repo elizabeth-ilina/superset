@@ -22,6 +22,7 @@ from functools import partial
 from typing import Any
 
 from flask_appbuilder.models.sqla import Model
+from marshmallow import ValidationError
 
 from superset import db
 from superset.commands.base import BaseCommand
@@ -36,6 +37,7 @@ from superset.commands.database.exceptions import (
 )
 from superset.commands.database.sync_permissions import SyncPermissionsCommand
 from superset.commands.database.utils import (
+    encrypted_extra_secrets_reused,
     engine_params_changed,
     oauth2_endpoint_rebind_unsafe,
     ssh_tunnel_rebind_unsafe,
@@ -43,6 +45,7 @@ from superset.commands.database.utils import (
 )
 from superset.constants import PASSWORD_MASK
 from superset.daos.database import DatabaseDAO
+from superset.databases.schemas import normalize_query_cost_warning
 from superset.databases.utils import make_url_safe
 from superset.exceptions import OAuth2Error, OAuth2RedirectError
 from superset.models.core import Database
@@ -281,7 +284,26 @@ class UpdateDatabaseCommand(BaseCommand):
                 raise DatabaseInvalidError(exceptions=[DatabaseExistsValidationError()])
 
         if self._model:
+            self._validate_query_cost_warning()
             self._check_no_unsafe_secret_rebind()
+
+    def _validate_query_cost_warning(self) -> None:
+        """Validate replacement or retained settings without adding omitted extra."""
+        assert self._model
+        serialized_extra = self._properties.get("extra", self._model.extra) or "{}"
+        try:
+            extra = json.loads(serialized_extra)
+        except json.JSONDecodeError as ex:
+            raise DatabaseInvalidError(exceptions=[ValidationError(str(ex))]) from ex
+        if "query_cost_warning" not in extra:
+            return
+        uri = self._properties.get("sqlalchemy_uri") or self._model.sqlalchemy_uri
+        try:
+            validated_extra = normalize_query_cost_warning(extra, uri)
+        except ValidationError as ex:
+            raise DatabaseInvalidError(exceptions=[ex]) from ex
+        if "extra" in self._properties:
+            self._properties["extra"] = json.dumps(validated_extra)
 
     def _check_no_unsafe_secret_rebind(self) -> None:
         """
@@ -305,7 +327,10 @@ class UpdateDatabaseCommand(BaseCommand):
         if "sqlalchemy_uri" in self._properties:
             submitted_uri = self._properties["sqlalchemy_uri"] or ""
             connection_identity_changed = uri_identity_changed(
-                model.sqlalchemy_uri, submitted_uri
+                model.sqlalchemy_uri,
+                submitted_uri,
+                model.extra,
+                self._properties.get("extra", model.extra),
             )
             try:
                 submitted_password = make_url_safe(submitted_uri).password
@@ -332,21 +357,18 @@ class UpdateDatabaseCommand(BaseCommand):
                 None,
                 PASSWORD_MASK,
             )
-            # encrypted_extra is a blob with per-field masks, so "reused"
-            # means unmasking the submission against the stored value
-            # changes nothing -- including not submitting it at all, which
-            # leaves the old (real) value attached unchanged.
-            encrypted_extra_reused = model.encrypted_extra not in (
-                None,
-                "",
-                "{}",
-            ) and (
-                "masked_encrypted_extra" not in self._properties
-                or model.db_engine_spec.unmask_encrypted_extra(
-                    model.encrypted_extra,
-                    self._properties["masked_encrypted_extra"],
-                )
-                == model.encrypted_extra
+            # encrypted_extra is a blob with per-field masks, so "reused" is
+            # judged per stored secret: one the submission leaves masked (or
+            # leaves out entirely) rides along. Comparing whole blobs missed a
+            # masked secret whenever any other field changed in the same save,
+            # and refused a move where every secret was re-entered unchanged.
+            encrypted_extra_reused = bool(
+                model.encrypted_extra
+            ) and encrypted_extra_secrets_reused(
+                model.db_engine_spec.encrypted_extra_sensitive_field_paths(),
+                model.encrypted_extra,
+                self._properties.get("masked_encrypted_extra"),
+                submitted="masked_encrypted_extra" in self._properties,
             )
             if uri_password_reused or encrypted_extra_reused:
                 raise DatabaseInvalidError(

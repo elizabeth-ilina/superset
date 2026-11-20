@@ -22,6 +22,7 @@ import type { AnyAction } from 'redux';
 import type { ThunkAction, ThunkDispatch } from 'redux-thunk';
 import type { QueryColumn, SupersetError } from '@superset-ui/core';
 import {
+  DatasourceType,
   FeatureFlag,
   SupersetClient,
   isFeatureEnabled,
@@ -29,7 +30,7 @@ import {
   getClientErrorObject,
 } from '@superset-ui/core';
 import { t } from '@apache-superset/core/translation';
-import { invert, mapKeys } from 'lodash-es';
+import { invert, isEqual, mapKeys } from 'lodash-es';
 
 import { now } from '@superset-ui/core/utils/dates';
 import {
@@ -49,10 +50,12 @@ import { rehydratePersistedState } from '../utils/reduxStateToLocalStorageHelper
 import { PREVIEW_QUERY_LIMIT } from '../constants';
 import { EMPTY_STATE_QE_ID } from '../hooks/useQueryEditor';
 import { queryHistoryApi } from '../../hooks/apiResources/queries';
+import { sqlEditorApi } from '../../hooks/apiResources/sqlEditorTabs';
 import type { AppDispatch as RootDispatch } from '../../views/store';
 
 // Type definitions for SqlLab actions
 export interface Query {
+  preparedQueryId?: string;
   id: string;
   dbId?: number;
   sql: string;
@@ -514,31 +517,43 @@ export function fetchQueryResults(
   };
 }
 
+// A query must exist on the server before its tab association can be migrated.
+const pendingQueryRequests = new Map<string, Promise<unknown>>();
+const pendingTabSaves = new Map<string, Promise<unknown>>();
+
+/** Share the captured execution inputs with server-side query preparation. */
+export function getQueryExecutionPayload(query: Query) {
+  return {
+    client_id: query.id,
+    database_id: query.dbId,
+    runAsync: query.runAsync,
+    catalog: query.catalog,
+    schema: query.schema,
+    sql: query.sql,
+    sql_editor_id: query.sqlEditorId,
+    tab: query.tab,
+    tmp_table_name: query.tempTable,
+    select_as_cta: query.ctas,
+    ctas_method: query.ctas_method,
+    templateParams: query.templateParams,
+    queryLimit: query.queryLimit,
+    expand_data: true,
+    ...(query.preparedQueryId
+      ? { prepared_query_id: query.preparedQueryId }
+      : {}),
+  };
+}
+
 export function runQuery(
   query: Query,
   runPreviewOnly?: boolean,
 ): SqlLabThunkAction<Promise<unknown>> {
   return function (dispatch: AppDispatch) {
     dispatch(startQuery(query, runPreviewOnly));
-    const postPayload = {
-      client_id: query.id,
-      database_id: query.dbId,
-      runAsync: query.runAsync,
-      catalog: query.catalog,
-      schema: query.schema,
-      sql: query.sql,
-      sql_editor_id: query.sqlEditorId,
-      tab: query.tab,
-      tmp_table_name: query.tempTable,
-      select_as_cta: query.ctas,
-      ctas_method: query.ctas_method,
-      templateParams: query.templateParams,
-      queryLimit: query.queryLimit,
-      expand_data: true,
-    };
+    const postPayload = getQueryExecutionPayload(query);
 
     const search = window.location.search || '';
-    return SupersetClient.post({
+    const request = SupersetClient.post({
       endpoint: `/api/v1/sqllab/execute/${search}`,
       body: JSON.stringify(postPayload),
       headers: { 'Content-Type': 'application/json' },
@@ -561,46 +576,58 @@ export function runQuery(
           }
           dispatch(queryFailed(query, message, error.link, error.errors));
         }),
-      );
+      )
+      .finally(() => {
+        if (pendingQueryRequests.get(query.id) === request) {
+          pendingQueryRequests.delete(query.id);
+        }
+      });
+    pendingQueryRequests.set(query.id, request);
+    return request;
   };
 }
 
-export function runQueryFromSqlEditor(
+/** Build one request for both the warning check and execution after confirmation. */
+export function buildSqlEditorQuery(
   database: Database | null,
   queryEditor: QueryEditor,
   defaultQueryLimit: number,
   tempTable?: string,
   ctas?: boolean,
   ctasMethod?: string,
-): SqlLabThunkAction {
-  return function (dispatch: AppDispatch, getState: GetState) {
-    const qe = getUpToDateQuery(getState(), queryEditor, queryEditor.id);
-    const query: Query = {
-      id: nanoid(11),
-      dbId: qe.dbId,
-      sql: qe.selectedText || qe.sql,
-      sqlEditorId: qe.tabViewId ?? qe.id,
-      sqlEditorImmutableId: qe.immutableId,
-      tab: qe.name,
-      catalog: qe.catalog,
-      schema: qe.schema,
-      tempTable,
-      templateParams: qe.templateParams,
-      queryLimit: qe.queryLimit || defaultQueryLimit,
-      runAsync: database ? database.allow_run_async : false,
-      ctas,
-      ctas_method: ctasMethod,
-      updateTabState: !qe.selectedText,
-    };
-    dispatch(runQuery(query));
+): Query {
+  return {
+    id: nanoid(11),
+    dbId: queryEditor.dbId,
+    sql: queryEditor.selectedText || queryEditor.sql,
+    sqlEditorId: queryEditor.tabViewId ?? queryEditor.id,
+    sqlEditorImmutableId: queryEditor.immutableId,
+    tab: queryEditor.name,
+    catalog: queryEditor.catalog,
+    schema: queryEditor.schema,
+    tempTable,
+    templateParams: queryEditor.templateParams,
+    queryLimit: queryEditor.queryLimit || defaultQueryLimit,
+    runAsync: database ? database.allow_run_async : false,
+    ctas,
+    ctas_method: ctasMethod,
+    updateTabState: !queryEditor.selectedText,
   };
 }
 
 export function reRunQuery(query: Query): SqlLabThunkAction {
   // run Query with a new id
   return function (dispatch: AppDispatch) {
-    dispatch(runQuery({ ...query, id: nanoid(11) }));
+    dispatch(
+      runQuery({ ...query, preparedQueryId: undefined, id: nanoid(11) }),
+    );
   };
+}
+
+export function refreshQueries(
+  alteredQueries: Record<string, Query>,
+): SqlLabAction {
+  return { type: REFRESH_QUERIES, alteredQueries };
 }
 
 export function postStopQuery(
@@ -614,7 +641,25 @@ export function postStopQuery(
     })
       .then(() => dispatch(stopQuery(query)))
       .then(() => dispatch(addSuccessToast(t('Query was stopped.'))))
-      .catch(() => dispatch(addDangerToast(t('Failed to stop query.'))));
+      .catch(async (response: Response) => {
+        if (response.status === 422) {
+          const payload: { query?: Query } = await response
+            .json()
+            .catch(() => ({}));
+          const finishedQuery = payload.query;
+          if (
+            finishedQuery &&
+            finishedQuery.id === query.id &&
+            ['success', 'failed', 'timed_out'].includes(
+              finishedQuery.state ?? '',
+            )
+          ) {
+            dispatch(refreshQueries({ [query.id]: finishedQuery }));
+            return;
+          }
+        }
+        dispatch(addDangerToast(t('Failed to stop query.')));
+      });
   };
 }
 
@@ -673,21 +718,12 @@ function migrateQuery(
     );
 }
 
-/**
- * Persist QueryEditor from local storage to backend tab state.
- * This ensures that when new tabs are created, query editors are
- * asynchronously stored in local storage and periodically synchronized
- * with the backend.
- * When switching to persistence mode, the QueryEditors previously
- * stored in local storage will also be synchronized to the backend
- * through syncQueryEditor.
- */
-export function syncQueryEditor(
+/** Create the server tab, then associate queries submitted against its local ID. */
+function persistQueryEditor(
   queryEditor: QueryEditor,
-): SqlLabThunkAction<Promise<unknown>> {
+): SqlLabThunkAction<Promise<void>> {
   return async function (dispatch: AppDispatch, getState: GetState) {
     try {
-      const { tables, queries } = getState().sqlLab;
       let databaseWasRemoved = false;
       if (queryEditor.dbId != null) {
         await SupersetClient.get({
@@ -707,13 +743,6 @@ export function syncQueryEditor(
             schema: undefined,
           }
         : queryEditor;
-      const localStorageTables = tables.filter(
-        (table: Table) =>
-          table.inLocalStorage && table.queryEditorId === queryEditor.id,
-      );
-      const queriesToMigrate = Object.values(queries).filter(
-        query => query.sqlEditorId === queryEditor.id && !query.isDataPreview,
-      );
       const { json } = await SupersetClient.post({
         endpoint: '/tabstateview/',
         postPayload: {
@@ -723,8 +752,18 @@ export function syncQueryEditor(
           },
         },
       });
+      const { tables, queries, queryEditors } = getState().sqlLab;
+      const currentEditor = queryEditors.find(
+        ({ id }) => id === queryEditor.id,
+      );
+      const latestEditor =
+        currentEditor && getUpToDateQuery(getState(), currentEditor);
       const newQueryEditor = {
         ...queryEditorToMigrate,
+        ...latestEditor,
+        ...(databaseWasRemoved && latestEditor?.dbId === queryEditor.dbId
+          ? { dbId: undefined, catalog: undefined, schema: undefined }
+          : {}),
         inLocalStorage: false,
         loaded: true,
         tabViewId: json.id.toString(),
@@ -734,21 +773,69 @@ export function syncQueryEditor(
         oldQueryEditor: queryEditor,
         newQueryEditor,
       });
-      if (databaseWasRemoved && localStorageTables.length > 0) {
-        dispatch({ type: REMOVE_TABLES, tables: localStorageTables });
+      if (!currentEditor) return;
+      const localStorageTables = tables.filter(
+        (table: Table) =>
+          table.inLocalStorage && table.queryEditorId === queryEditor.id,
+      );
+      const queriesToMigrate = Object.values(queries).filter(
+        query => query.sqlEditorId === queryEditor.id && !query.isDataPreview,
+      );
+      const removedDatabaseTables = databaseWasRemoved
+        ? localStorageTables.filter(table => table.dbId === queryEditor.dbId)
+        : [];
+      if (removedDatabaseTables.length > 0) {
+        dispatch({ type: REMOVE_TABLES, tables: removedDatabaseTables });
       }
-      return Promise.all([
-        ...(databaseWasRemoved
-          ? []
-          : localStorageTables.map((table: Table) =>
-              migrateTable(table, newQueryEditor.tabViewId!, dispatch),
-            )),
-        ...queriesToMigrate.map((query: Query) =>
-          migrateQuery(query.id, newQueryEditor.tabViewId!, dispatch),
-        ),
+      await Promise.all([
+        ...localStorageTables
+          .filter(table => !removedDatabaseTables.includes(table))
+          .map(table =>
+            migrateTable(table, newQueryEditor.tabViewId!, dispatch),
+          ),
+        ...queriesToMigrate.map(async (query: Query) => {
+          await pendingQueryRequests.get(query.id);
+          const state = getState().sqlLab;
+          if (
+            state.queries[query.id]?.sqlEditorId === queryEditor.id &&
+            state.queryEditors.some(({ id }) => id === queryEditor.id)
+          ) {
+            await migrateQuery(query.id, newQueryEditor.tabViewId!, dispatch);
+          }
+        }),
       ]);
+      const state = getState();
+      if (!state.sqlLab.queryEditors.some(({ id }) => id === queryEditor.id))
+        return;
+      const updatedEditor = getUpToDateQuery(state, queryEditor);
+      if (updatedEditor.tabViewId !== newQueryEditor.tabViewId) return;
+      if (
+        !isEqual(updatedEditor, {
+          ...queryEditorToMigrate,
+          inLocalStorage: false,
+          loaded: true,
+          tabViewId: newQueryEditor.tabViewId,
+        })
+      ) {
+        // Preserve edits made during creation without referencing an uncreated query.
+        const latestQueryId = queriesToMigrate.find(
+          query =>
+            query.id === updatedEditor.latestQueryId &&
+            state.sqlLab.queries[query.id]?.sqlEditorId ===
+              newQueryEditor.tabViewId,
+        )?.id;
+        await dispatch(
+          sqlEditorApi.endpoints.updateSqlEditorTab.initiate({
+            queryEditor: { ...updatedEditor, latestQueryId },
+          }),
+        )
+          .unwrap()
+          .catch(() =>
+            dispatch(addDangerToast(t('Your query could not be saved'))),
+          );
+      }
     } catch {
-      return dispatch(
+      dispatch(
         addWarningToast(
           t(
             'Unable to migrate query editor state to backend. Superset will retry ' +
@@ -757,6 +844,34 @@ export function syncQueryEditor(
         ),
       );
     }
+  };
+}
+
+/**
+ * Persist QueryEditor from local storage to backend tab state.
+ * This ensures that when new tabs are created, query editors are
+ * asynchronously stored in local storage and periodically synchronized
+ * with the backend.
+ * When switching to persistence mode, the QueryEditors previously
+ * stored in local storage will also be synchronized to the backend
+ * through syncQueryEditor.
+ */
+export function syncQueryEditor(
+  queryEditor: QueryEditor,
+): SqlLabThunkAction<Promise<unknown>> {
+  return (dispatch, getState) => {
+    const currentEditor = getState().sqlLab.queryEditors.find(
+      ({ id }) => id === queryEditor.id,
+    );
+    if (!currentEditor?.inLocalStorage) return Promise.resolve();
+    const key = queryEditor.immutableId || queryEditor.id;
+    const pendingSave = pendingTabSaves.get(key);
+    if (pendingSave) return pendingSave;
+    const save = dispatch(persistQueryEditor(queryEditor)).finally(() => {
+      pendingTabSaves.delete(key);
+    });
+    pendingTabSaves.set(key, save);
+    return save;
   };
 }
 
@@ -823,9 +938,11 @@ export function addNewQueryEditor(): SqlLabThunkAction<SqlLabAction> {
   };
 }
 
+/** Clone with existing effective settings and optional deliberate-run intent. */
 export function cloneQueryToNewTab(
   query: Query,
   autorun: boolean,
+  autorunSource?: QueryEditor['autorunSource'],
 ): SqlLabThunkAction<SqlLabAction> {
   return function (dispatch: AppDispatch, getState: GetState) {
     const state = getState();
@@ -843,6 +960,7 @@ export function cloneQueryToNewTab(
       catalog: query.catalog,
       schema: query.schema ?? undefined,
       autorun,
+      ...(autorunSource && { autorunSource }),
       sql: query.sql,
       queryLimit: sourceQueryEditor.queryLimit,
       templateParams: sourceQueryEditor.templateParams,
@@ -1118,6 +1236,25 @@ export function queryEditorSetTitle(
   };
 }
 
+// Rejects so callers (the Save query modal) know the save failed. A rejected
+// request that the server flagged as invalid (422) rejects with an `Error`
+// carrying the server's message, to be shown next to the form; any other
+// failure raises the generic toast and rejects with the original error.
+const rejectFailedSavedQueryRequest = async (
+  dispatch: AppDispatch,
+  error: unknown,
+  toastMessage: string,
+): Promise<never> => {
+  const clientError = await getClientErrorObject(
+    error as Parameters<typeof getClientErrorObject>[0],
+  );
+  if (clientError.status === 422 && clientError.error) {
+    throw new Error(clientError.error);
+  }
+  dispatch(addDangerToast(toastMessage));
+  throw error;
+};
+
 export function saveQuery(
   query: Partial<QueryEditor>,
   clientId: string,
@@ -1145,8 +1282,12 @@ export function saveQuery(
         dispatch(queryEditorSetTitle(query, query.name ?? '', clientId));
         return savedQuery;
       })
-      .catch(() =>
-        dispatch(addDangerToast(t('Your query could not be saved'))),
+      .catch(error =>
+        rejectFailedSavedQueryRequest(
+          dispatch,
+          error,
+          t('Your query could not be saved'),
+        ),
       );
 }
 
@@ -1189,15 +1330,16 @@ export function updateSavedQuery(
       .then(() => {
         dispatch(addSuccessToast(t('Your query was updated')));
         dispatch(queryEditorSetTitle(query, query.name ?? '', clientId));
-      })
-      .catch(e => {
-        const message = t('Your query could not be updated');
-        // eslint-disable-next-line no-console
-        console.error(message, e);
-        dispatch(addDangerToast(message));
-      })
-      .then(() => {
         dispatch(updateQueryEditor(query));
+      })
+      .catch(error => {
+        // eslint-disable-next-line no-console
+        console.error(t('Your query could not be updated'), error);
+        return rejectFailedSavedQueryRequest(
+          dispatch,
+          error,
+          t('Your query could not be updated'),
+        );
       });
 }
 
@@ -1519,12 +1661,6 @@ export function removeTables(
   };
 }
 
-export function refreshQueries(
-  alteredQueries: Record<string, Query>,
-): SqlLabAction {
-  return { type: REFRESH_QUERIES, alteredQueries };
-}
-
 export function setUserOffline(offline: boolean): SqlLabAction {
   return { type: SET_USER_OFFLINE, offline };
 }
@@ -1643,7 +1779,40 @@ export function popDatasourceQuery(
 ): SqlLabThunkAction<Promise<unknown>> {
   return function (dispatch: AppDispatch) {
     const QUERY_TEXT = t('Query');
-    const datasetId = datasourceKey.split('__')[0];
+    const [datasetId, datasourceType] = datasourceKey.split('__');
+
+    // The id of a `query` datasource is a SQL Lab query id, not a dataset id.
+    if (datasourceType === DatasourceType.Query) {
+      return SupersetClient.get({
+        endpoint: `/fetch_datasource_metadata?datasourceKey=${encodeURIComponent(datasourceKey)}`,
+      })
+        .then(({ json }) =>
+          dispatch(
+            addQueryEditor({
+              name: json.name ? `${QUERY_TEXT} ${json.name}` : QUERY_TEXT,
+              dbId: json.database.id,
+              catalog: json.catalog,
+              schema: json.schema,
+              autorun: false,
+              sql: sql || json.sql,
+            }),
+          ),
+        )
+        .catch(() =>
+          dispatch(addDangerToast(t("The datasource couldn't be loaded"))),
+        );
+    }
+
+    // Only tables are looked up as datasets; other typed keys (for example
+    // semantic views) have no dataset to open an editor from.
+    if (
+      datasourceType !== undefined &&
+      datasourceType !== DatasourceType.Table
+    ) {
+      return Promise.resolve(
+        dispatch(addDangerToast(t("The datasource couldn't be loaded"))),
+      );
+    }
 
     const queryParams = rison.encode({
       keys: ['none'],
